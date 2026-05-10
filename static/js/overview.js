@@ -32,16 +32,6 @@ function escHtml(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function escapeRegExp(s) {
-  const specials = "*+?^${}()|[]\\/."; // characters that should be escaped
-  let out = "";
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i];
-    out += (specials.indexOf(ch) >= 0) ? String.fromCharCode(92) + ch : ch;
-  }
-  return out;
-}
-
 function makeSnippet(text, q, maxLen = 140) {
   if (!q || !text) return '';
   const t = String(text);

@@ -37,16 +37,6 @@ function getSearchQuery() {
   return new URL(window.location.href).searchParams.get('q') || '';
 }
 
-function escapeRegExp(s) {
-  const specials = "*+?^${}()|[]\\/.";
-  let out = "";
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i];
-    out += (specials.indexOf(ch) >= 0) ? String.fromCharCode(92) + ch : ch;
-  }
-  return out;
-}
-
 function highlightSearchInNode(root, query) {
   const tokens = query.trim().split(/\\s+/).filter(Boolean);
   if (!tokens.length || !root) return 0;
