@@ -1793,6 +1793,17 @@ def main():
     args = parser.parse_args()
 
     _self_mtime = os.path.getmtime(__file__)
+    # Consider static assets' modification time so updates to static/*/ trigger re-generation
+    assets_mtime = 0
+    try:
+        assets_root = HERE.joinpath('static')
+        if assets_root.exists():
+            for p in assets_root.rglob('*'):
+                if p.is_file():
+                    assets_mtime = max(assets_mtime, p.stat().st_mtime)
+    except Exception:
+        assets_mtime = 0
+    _effective_self_mtime = max(_self_mtime, assets_mtime)
 
     if args.input:
         # ── Single file mode ──────────────────────────────────────────
@@ -1816,7 +1827,7 @@ def main():
         output_path = os.path.join(os.path.dirname(input_path), "events.html")
         if os.path.exists(output_path) and not args.story:
             out_mtime = os.path.getmtime(output_path)
-            if os.path.getmtime(input_path) <= out_mtime and _self_mtime <= out_mtime:
+            if os.path.getmtime(input_path) <= out_mtime and _effective_self_mtime <= out_mtime:
                 print(f"Up to date: {output_path}")
                 return
         process_file(input_path, output_path, a11y=args.a11y, story=args.story, force=args.force, language=args.language)
@@ -1838,7 +1849,7 @@ def main():
             out = os.path.join(os.path.dirname(p), "events.html")
             if os.path.exists(out):
                 out_mtime = os.path.getmtime(out)
-                if os.path.getmtime(p) <= out_mtime and _self_mtime <= out_mtime:
+                if os.path.getmtime(p) <= out_mtime and _effective_self_mtime <= out_mtime:
                     skipped += 1
                     continue
             try:
