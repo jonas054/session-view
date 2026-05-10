@@ -1,0 +1,9 @@
+.badge-success { color: #2563eb; }
+.badge-fail    { color: #ea580c; }
+.diff-add  { background: #1e3a5f; color: #93c5fd; }
+.diff-del  { background: #431407; color: #fed7aa; }
+.diff-add::before { content: "+"; }
+.diff-del::before { content: "−"; }
+.jn    { color: #fbbf24; }
+.js    { color: #93c5fd; }
+.grep-match { background: #312e81; color: #c7d2fe; }
