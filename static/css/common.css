@@ -1,0 +1,54 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f1f5f9;
+  color: #1e293b;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.container {
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+/* Shared code/pre styles */
+.json-block, .result-pre, .code-block, .arg-pretty-val, .sql-result, .diff-block, .grep-block {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 6px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 500px;
+  overflow-y: auto;
+  margin: 0;
+}
+
+/* Shared table header */
+.sessions-table th, .mu-table th, .metrics-table th {
+  border-bottom: 2px solid #e2e8f0;
+  color: #475569;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* Shared panel also used for turns */
+.overview-section, .raw-section, .story-section, .turns-section {
+  background: white;
+  border-radius: 12px;
+  padding: 28px;
+  margin-bottom: 28px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+
+/* Shared page title */
+.page-title { font-size: 1.6rem; font-weight: 700; }

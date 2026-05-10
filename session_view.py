@@ -1280,6 +1280,7 @@ def _load_asset_text(relpath: str) -> str:
 
 
 CSS = _load_asset_text("static/css/events.css")
+COMMON_CSS = _load_asset_text("static/css/common.css")
 
 # CSS overrides for red/green colorblindness (deuteranopia/protanopia).
 # Swaps red→orange and green→blue throughout, and adds pattern cues to diffs.
@@ -1317,6 +1318,7 @@ def render_html(overview: dict, turns: list, events: list, source_path: str, a11
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Copilot Session — {escape(filename)}</title>
   <link rel="icon" type="image/svg+xml" href="{_FAVICON_URI}">
+  <style>{COMMON_CSS}</style>
   <style>{CSS}{extra_css}</style>
 </head>
 <body>
@@ -1541,6 +1543,7 @@ def build_overview_html(sessions: list) -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Copilot Sessions Overview</title>
   <link rel="icon" type="image/svg+xml" href="{_FAVICON_URI}">
+  <style>{COMMON_CSS}</style>
   <style>{OVERVIEW_CSS}</style>
 </head>
 <body>
