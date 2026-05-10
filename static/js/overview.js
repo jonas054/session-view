@@ -141,7 +141,7 @@ function render() {
       tr.dataset.group = gk;
       tr.innerHTML =
         `<td colspan="7">` +
-        `<span class="group-toggle">${isCollapsed ? '\\u25b6' : '\\u25bc'}</span> ` +
+        `<span class="group-toggle">${isCollapsed ? '▶' : '▼'}</span> ` +
         `<strong>${escHtml(gk)}</strong>` +
         `<span class="group-count">${cnt} session${cnt === 1 ? '' : 's'}</span></td>`;
       tr.addEventListener('click', () => toggleGroup(gk));
@@ -196,7 +196,7 @@ function render() {
     const col = parseInt(th.dataset.col);
     th.classList.toggle('sort-active', col === sortCol);
     th.querySelector('.sort-ind').textContent =
-      col !== sortCol ? ' \\u2195' : sortAsc ? ' \\u2191' : ' \\u2193';
+      col !== sortCol ? ' ↕' : sortAsc ? ' ↑' : ' ↓';
   });
 }
 
