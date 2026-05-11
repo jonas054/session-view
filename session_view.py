@@ -1134,9 +1134,20 @@ def render_steps(steps: list, turn_idx: int) -> str:
         raw_link = f'<a class="raw-link" href="#" onclick="goToRaw(\'ev-{escape(ev_id)}\');return false;" title="View raw event">⌗</a>' if ev_id else ""
 
         if kind == "reasoning":
-            preview = abbreviate(step["content"], 140)
-            preview_html = f'<span class="tool-intent">{escape(preview)}</span>' if preview else ""
-            parts.append(f"""
+            if len(step["content"].strip()) < 200 and "\n" not in step["content"].strip():
+                parts.append(f"""
+            <div class="tool-step reasoning-step reasoning-static" id="{step_id}">
+              <div class="reasoning-header" style="border-left:3px solid #8b5cf6">
+                <span class="tool-icon">🧠</span>
+                <span class="tool-name">reasoning</span>
+                <span class="reasoning-inline-content">{_md_inline(step["content"])}</span>
+                {raw_link}
+              </div>
+            </div>""")
+            else:
+                preview = abbreviate(step["content"], 140)
+                preview_html = f'<span class="tool-intent">{escape(preview)}</span>' if preview else ""
+                parts.append(f"""
             <details class="tool-step reasoning-step" id="{step_id}">
               <summary class="tool-summary" style="background:#f5f3ff;border-left:3px solid #8b5cf6">
                 <span class="tool-icon">🧠</span>

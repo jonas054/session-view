@@ -232,6 +232,10 @@ details[open] > .tool-summary { border-bottom: 1px solid #e2e8f0; }
   border-color: #ddd6fe;
 }
 
+.reasoning-header {
+  padding: 8px;
+}
+
 .reasoning-body {
   background: #fcfaff;
   font-size: 13px;
