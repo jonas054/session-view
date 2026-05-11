@@ -557,6 +557,39 @@ def _render_unified_diff_text(text: str) -> str:
     return f'<pre class="diff-block">{"".join(rows)}</pre>'
 
 
+def _looks_like_text_with_line_numbers(content: str):
+    lines = content.splitlines()
+    if not lines:
+        return False
+    count_with_number = sum(1 for ln in lines[:10] if re.match(r"^\d+[.:]", ln))
+    return count_with_number == len(lines[:10])
+
+
+def _render_text_with_line_numbers(content: str) -> str:
+    # Determine maximum number width so the numbers can be right-justified
+    max_digits = 0
+    for ln in content.splitlines():
+        m = re.match(r"^(\d+)\.", ln)
+        if m:
+            max_digits = max(max_digits, len(m.group(1)))
+    if max_digits == 0:
+        max_digits = 4
+
+    rows = []
+    for line in content.splitlines(keepends=True):
+        m = re.match(r"^(\d+)\.(.*)", line)
+        if m:
+            number_part = m.group(1)
+            text_part = m.group(2)
+            rows.append(
+                f'<span class="line-num" style="display:inline-block;min-width:{max_digits}ch;text-align:right">{escape(number_part)}</span>'
+                f'<span class="line-text">{escape(text_part)}</span><br>'
+            )
+        else:
+            rows.append(escape(line))
+    return f'<pre class="result-pre">{"".join(rows)}</pre>'
+
+
 def _render_result_text(content: str, tool_name: str = "", args=None) -> str:
     if tool_name == "grep":
         return _render_grep_result(content, args)
@@ -566,6 +599,8 @@ def _render_result_text(content: str, tool_name: str = "", args=None) -> str:
         return f'<div class="agent-result md-body">{markdown_to_html(content)}</div>'
     if tool_name == "bash" and _looks_like_unified_diff(content):
         return _render_unified_diff_text(content)
+    if tool_name == "view" and _looks_like_text_with_line_numbers(content):
+        return _render_text_with_line_numbers(content)
     return f'<pre class="result-pre">{escape(content[:4000])}{"..." if len(content) > 4000 else ""}</pre>'
 
 
@@ -661,6 +696,10 @@ def _render_args_pretty(args: dict) -> str:
         else:
             parts.append(f'{key_html}<div class="json-block">{json_html(v)}</div>')
     return "\n".join(parts)
+
+
+def render_args_with_header(args, tool_name: str = "") -> str:
+    return '<div class="tool-section-label">Arguments</div>' + render_args(args, tool_name)
 
 
 def render_args(args, tool_name: str = "") -> str:
@@ -1189,6 +1228,7 @@ def render_steps(steps: list, turn_idx: int) -> str:
                 {raw_link}
               </summary>
               <div class="tool-body">
+                {render_args_with_header(args, name)}
                 {('<div class="tool-section-label">Result</div>' + render_tool_result(result, name, args)) if result is not None else ''}
               </div>
             </details>""")
@@ -1222,6 +1262,7 @@ def render_steps(steps: list, turn_idx: int) -> str:
                 {raw_link}
               </summary>
               <div class="tool-body">
+                {render_args_with_header(args, name) if name != "view" else ""}
                 {('<div class="tool-section-label">Result</div>' + render_tool_result(result, name, args)) if result is not None else ''}
               </div>
             </details>""")
