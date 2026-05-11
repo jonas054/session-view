@@ -1189,8 +1189,6 @@ def render_steps(steps: list, turn_idx: int) -> str:
                 {raw_link}
               </summary>
               <div class="tool-body">
-                <div class="tool-section-label">Arguments</div>
-                {render_args(args, name)}
                 {('<div class="tool-section-label">Result</div>' + render_tool_result(result, name, args)) if result is not None else ''}
               </div>
             </details>""")
@@ -1224,8 +1222,6 @@ def render_steps(steps: list, turn_idx: int) -> str:
                 {raw_link}
               </summary>
               <div class="tool-body">
-                <div class="tool-section-label">Arguments</div>
-                {render_args(args, name)}
                 {('<div class="tool-section-label">Result</div>' + render_tool_result(result, name, args)) if result is not None else ''}
               </div>
             </details>""")
