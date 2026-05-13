@@ -71,12 +71,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let updatedAt = json["updated_at"] as? Double
 
                 var title = "Copilot"
-                if let p = percent {
-                    title = String(format: "Copilot: %.0f%%", p)
-                } else if let t = total {
+                if let t = total {
                     title = "Copilot: \(t) tok"
-                } else {
-                    title = "Copilot"
+                } else if let p = percent {
+                    title = String(format: "Copilot: %.0f%%", p)
                 }
                 statusItem.button?.title = title
 
