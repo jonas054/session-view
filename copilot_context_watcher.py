@@ -16,7 +16,7 @@ import os
 import sys
 import time
 import json
-import re
+
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -48,8 +48,6 @@ MODEL_MAX_TOKENS = {
     "gpt-5.4-mini": 65536,
     "claude-sonnet-4.6": 131072,
 }
-
-TOKEN_KEY_RE = re.compile(r"(?i)(?:total|input|output|prompt|completion|response|used)?.*token")
 
 def find_active_session_dir(state_dir: Path) -> Optional[Path]:
     """Find the session directory whose events.jsonl is newest AND has an inuse.*.lock file next to it.
@@ -151,50 +149,6 @@ def find_events_file(session_dir: Path) -> Optional[Path]:
     return None
 
 
-def extract_usage_from_obj(obj: Any) -> Dict[str, Any]:
-    """Recursively scan object for token counts and model.
-    Returns dict with keys: model, input_tokens, output_tokens, total_tokens, timestamp
-    """
-    result = {"model": None, "input_tokens": None, "output_tokens": None, "total_tokens": None, "timestamp": None}
-
-    def walk(o):
-        if isinstance(o, dict):
-            for k, v in o.items():
-                lk = str(k).lower()
-                if lk == 'model' and isinstance(v, str):
-                    result['model'] = v
-                if isinstance(v, (int, float)) and TOKEN_KEY_RE.search(k):
-                    # prefer explicit keys
-                    keyname = k.lower()
-                    if 'input' in keyname or 'prompt' in keyname:
-                        result['input_tokens'] = int(v)
-                    elif 'output' in keyname or 'completion' in keyname or 'response' in keyname:
-                        result['output_tokens'] = int(v)
-                    elif 'total' in keyname:
-                        result['total_tokens'] = int(v)
-                # special-case nested usage objects
-                if k.lower() in ('usage', 'token_usage', 'tokens') and isinstance(v, dict):
-                    for kk, vv in v.items():
-                        if isinstance(vv, (int, float)):
-                            if 'prompt' in kk.lower() or 'input' in kk.lower():
-                                result['input_tokens'] = int(vv)
-                            elif 'completion' in kk.lower() or 'output' in kk.lower():
-                                result['output_tokens'] = int(vv)
-                            elif 'total' in kk.lower() or 'used' in kk.lower():
-                                result['total_tokens'] = int(vv)
-                walk(v)
-        elif isinstance(o, list):
-            for item in o:
-                walk(item)
-
-    walk(obj)
-    # derive total if possible
-    if result['total_tokens'] is None:
-        vals = [v for k,v in result.items() if k.endswith('_tokens') and v is not None]
-        if vals:
-            result['total_tokens'] = sum(vals)
-    return result
-
 
 def write_status_file(snapshot: Dict[str, Any]):
     STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -204,77 +158,60 @@ def write_status_file(snapshot: Dict[str, Any]):
     tmp.replace(STATUS_FILE)
 
 
-def process_line(line: str, last_snapshot: Dict[str, Any]) -> Dict[str, Any]:
-    try:
-        obj = json.loads(line)
-    except Exception:
-        return last_snapshot
-    ts = obj.get('timestamp') or obj.get('data', {}).get('timestamp') or obj.get('data', {}).get('time')
-    usage = extract_usage_from_obj(obj)
-    if usage['model'] is None and isinstance(obj.get('data'), dict):
-        usage['model'] = obj['data'].get('model') or usage['model']
-    # merge with last
-    snap = last_snapshot.copy()
-    snap_updated = False
-    for key in ('model','input_tokens','output_tokens','total_tokens'):
-        if usage.get(key) is not None and usage.get(key) != snap.get(key):
-            snap[key] = usage[key]
-            snap_updated = True
-    if ts:
-        snap['timestamp'] = ts
-    # enrich with percentage if model known and max available
-    model = snap.get('model')
-    max_tokens = MODEL_MAX_TOKENS.get(model)
-    if max_tokens and snap.get('total_tokens') is not None:
-        snap['percent_used'] = round(100.0 * snap['total_tokens'] / max_tokens, 2)
-    else:
-        snap['percent_used'] = None
-    if snap_updated:
-        snap['updated_at'] = time.time()
-    return snap
+def scan_events_for_snapshot(events_path: Path) -> Dict[str, Any]:
+    """Read all assistant.message events and sum their token counts.
 
+    Each event carries per-message token counts (not running totals), so we
+    must accumulate them ourselves across the whole file.
+    """
+    input_tokens = 0
+    output_tokens = 0
+    model = None
+    timestamp = None
 
-def scan_events_for_initial_snapshot(events_path: Path) -> Dict[str, Any]:
-    snap = {'model': None, 'input_tokens': None, 'output_tokens': None, 'total_tokens': None, 'percent_used': None, 'timestamp': None}
     try:
         st = events_path.stat()
-        _dprint(f"Scanning initial snapshot from {events_path} (size={st.st_size} mtime={st.st_mtime})")
+        _dprint(f"Scanning {events_path} (size={st.st_size} mtime={st.st_mtime})")
     except Exception as e:
-        _dprint(f"Could not stat events file {events_path}: {e}")
+        _dprint(f"Could not stat {events_path}: {e}")
 
     try:
-        # read last chunk and scan recent lines for usage-like fields
-        with events_path.open('rb') as f:
-            f.seek(0, os.SEEK_END)
-            size = f.tell()
-            block_size = 8192
-            data = b''
-            blocks = 0
-            while size > 0 and blocks < 64 and len(data) < 200 * 2000:
-                seek = max(0, size - block_size)
-                f.seek(seek)
-                data = f.read(min(size, block_size)) + data
-                size = seek
-                blocks += 1
-
-            try:
-                text = data.decode('utf-8', errors='replace')
-            except Exception as e:
-                _dprint(f"Decode error reading {events_path}: {e}")
-                text = ''
-
-        lines = text.splitlines()[-1000:]
-        _dprint(f"Initial scan: read {len(lines)} lines")
-
-        for idx, line in enumerate(lines):
-            snap = process_line(line, snap)
-            if _debug_enabled() and idx == len(lines) - 1:
-                _dprint(f"Initial scan last-line snapshot: {snap}")
-
-        return snap
+        with events_path.open('r', encoding='utf-8', errors='replace') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except Exception:
+                    continue
+                if obj.get('type') != 'assistant.message':
+                    continue
+                data = obj.get('data', {})
+                if isinstance(data.get('inputTokens'), (int, float)):
+                    input_tokens += int(data['inputTokens'])
+                if isinstance(data.get('outputTokens'), (int, float)):
+                    output_tokens += int(data['outputTokens'])
+                if data.get('model'):
+                    model = data['model']
+                if obj.get('timestamp'):
+                    timestamp = obj['timestamp']
     except Exception as e:
-        _dprint(f"Failed initial scan of {events_path}: {e}")
-        return snap
+        _dprint(f"Failed to scan {events_path}: {e}")
+
+    total = input_tokens + output_tokens
+    snap: Dict[str, Any] = {
+        'model': model,
+        'input_tokens': input_tokens or None,
+        'output_tokens': output_tokens or None,
+        'total_tokens': total or None,
+        'timestamp': timestamp,
+        'updated_at': time.time(),
+    }
+    max_tokens = MODEL_MAX_TOKENS.get(model or '')
+    snap['percent_used'] = round(100.0 * total / max_tokens, 2) if max_tokens and total else None
+    _dprint(f"Snapshot: {snap}")
+    return snap
 
 
 def collect_all_mtimes(state_dir: Path) -> Dict[Path, float]:
@@ -313,7 +250,7 @@ def run_daemon(poll_interval: float = 1.0):
     if session_dir:
         events = find_events_file(session_dir)
         if events:
-            snapshot = scan_events_for_initial_snapshot(events)
+            snapshot = scan_events_for_snapshot(events)
             write_status_file(snapshot)
             print('Initial snapshot:', snapshot, flush=True)
 
@@ -344,7 +281,7 @@ def run_daemon(poll_interval: float = 1.0):
             _dprint(f"No events.jsonl in {session_dir}")
             continue
 
-        new_snap = scan_events_for_initial_snapshot(events)
+        new_snap = scan_events_for_snapshot(events)
         if new_snap != snapshot:
             snapshot = new_snap
             write_status_file(snapshot)
@@ -385,7 +322,7 @@ def main(argv):
             if not events:
                 print('No events.jsonl in', session_dir)
                 return 3
-            snapshot = scan_events_for_initial_snapshot(events)
+            snapshot = scan_events_for_snapshot(events)
             print_once(events, snapshot)
             return 0
 
