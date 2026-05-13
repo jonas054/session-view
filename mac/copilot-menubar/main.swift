@@ -72,7 +72,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
                 var title = "Copilot"
                 if let t = total {
-                    title = "Copilot: \(t) tok"
+                    let formatted: String
+                    if t >= 1_000_000 {
+                        formatted = String(format: "%.1fM", Double(t) / 1_000_000)
+                    } else if t >= 1_000 {
+                        formatted = String(format: "%.1fK", Double(t) / 1_000)
+                    } else {
+                        formatted = "\(t)"
+                    }
+                    title = "Copilot: \(formatted) tok"
                 } else if let p = percent {
                     title = String(format: "Copilot: %.0f%%", p)
                 }
