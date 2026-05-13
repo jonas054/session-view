@@ -277,26 +277,35 @@ def scan_events_for_initial_snapshot(events_path: Path) -> Dict[str, Any]:
         return snap
 
 
-def follow_events(events_path: Path, poll_interval: float = 1.0):
-    # initial snapshot
-    snapshot = scan_events_for_initial_snapshot(events_path)
+def follow_events(events_path: Path, snapshot, poll_interval: float = 1.0):
+    """Tail events_path and update snapshot whenever new usage lines appear.
+    This blocks and sleeps between polls until interrupted (KeyboardInterrupt).
+    """
     write_status_file(snapshot)
-    with events_path.open('r', encoding='utf-8', errors='replace') as f:
-        # go to end
-        f.seek(0, os.SEEK_END)
-        line = f.readline()
-        if not line:
-            time.sleep(poll_interval)
-            return
-        new_snap = process_line(line, snapshot)
-        if new_snap.get('updated_at') != snapshot.get('updated_at'):
-            snapshot = new_snap
-            write_status_file(snapshot)
-            print('Updated:', snapshot)
+    try:
+        with events_path.open('r', encoding='utf-8', errors='replace') as f:
+            # Start at the end of file and tail
+            f.seek(0, os.SEEK_END)
+            while True:
+                line = f.readline()
+                if not line:
+                    time.sleep(poll_interval)
+                    continue
+                # process this line and any immediately-available following lines
+                lines = [line]
+                lines.extend(f.readlines())
+                for ln in lines:
+                    new_snap = process_line(ln, snapshot)
+                    if new_snap.get('updated_at') != snapshot.get('updated_at'):
+                        snapshot = new_snap
+                        write_status_file(snapshot)
+                        print('Updated:', snapshot)
+    except FileNotFoundError:
+        # caller will handle
+        raise
 
 
-def print_once(events_path: Path):
-    snap = scan_events_for_initial_snapshot(events_path)
+def print_once(events_path: Path, snap):
     # write a persistent status snapshot for external viewers
     try:
         write_status_file(snap)
@@ -320,27 +329,29 @@ def main(argv):
         _dprint(f"COPILOT_STATE={COPILOT_STATE}")
         _dprint(f"STATUS_FILE={STATUS_FILE}")
 
+    session_dir = find_active_session_dir(COPILOT_STATE)
+    if not session_dir:
+        print('No copilot session-state directory found under', COPILOT_STATE)
+        return 2
+
+    events = find_events_file(session_dir)
+    if events:
+        snapshot = scan_events_for_initial_snapshot(events)
+    else:
+        snapshot = {'model': None, 'input_tokens': None, 'output_tokens': None, 'total_tokens': None, 'percent_used': None, 'timestamp': None}
+
     try:
-        while True:
-            session_dir = find_active_session_dir(COPILOT_STATE)
-            if not session_dir:
-                print('No copilot session-state directory found under', COPILOT_STATE)
-                return 2
-
-            _dprint(f"Selected session_dir={session_dir}")
-
-            events = find_events_file(session_dir)
+        if once:
             if not events:
                 print('No events.jsonl in', session_dir)
                 return 3
+            print_once(events, snapshot)
+            return 0
 
-            if once:
-                print_once(events)
-                return 0
-
-            follow_events(events, poll_interval=interval)
+        # Tail the events file until interrupted
+        follow_events(events, snapshot, poll_interval=interval)
     except FileNotFoundError:
-        print('events.jsonl not found:', events_path)
+        print('events.jsonl not found')
     except KeyboardInterrupt:
         print('Stopping...')
 

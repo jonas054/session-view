@@ -19,7 +19,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Loading…", action: nil, keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit Copilot Context", action: #selector(quit), keyEquivalent: "q"))
+        let quitItem = NSMenuItem(title: "Quit Copilot Context", action: #selector(quit), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
         statusItem.menu = menu
 
         // Polling timer. Also updates immediately.
@@ -52,7 +54,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem.button?.title = "Copilot: —"
             menu.addItem(NSMenuItem(title: "No active Copilot session", action: nil, keyEquivalent: ""))
             menu.addItem(NSMenuItem.separator())
-            menu.addItem(NSMenuItem(title: "Quit Copilot Context", action: #selector(quit), keyEquivalent: "q"))
+            let quitItem = NSMenuItem(title: "Quit Copilot Context", action: #selector(quit), keyEquivalent: "q")
+            quitItem.target = self
+            menu.addItem(quitItem)
             return
         }
 
@@ -91,22 +95,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
 
                 menu.addItem(NSMenuItem.separator())
-                menu.addItem(NSMenuItem(title: "Open Copilot session folder…", action: #selector(openSessionFolder), keyEquivalent: "o"))
-                menu.addItem(NSMenuItem(title: "Run watcher (if missing)", action: #selector(runWatcher), keyEquivalent: "r"))
+                let openItem = NSMenuItem(title: "Open Copilot session folder…", action: #selector(openSessionFolder), keyEquivalent: "o")
+                openItem.target = self
+                menu.addItem(openItem)
+                let runItem = NSMenuItem(title: "Run watcher (if missing)", action: #selector(runWatcher), keyEquivalent: "r")
+                runItem.target = self
+                menu.addItem(runItem)
                 menu.addItem(NSMenuItem.separator())
-                menu.addItem(NSMenuItem(title: "Quit Copilot Context", action: #selector(quit), keyEquivalent: "q"))
+                let quitItem = NSMenuItem(title: "Quit Copilot Context", action: #selector(quit), keyEquivalent: "q")
+                quitItem.target = self
+                menu.addItem(quitItem)
 
             } else {
                 statusItem.button?.title = "Copilot: —"
                 menu.addItem(NSMenuItem(title: "No readable JSON in \(STATUS_PATH)", action: nil, keyEquivalent: ""))
                 menu.addItem(NSMenuItem.separator())
-                menu.addItem(NSMenuItem(title: "Quit Copilot Context", action: #selector(quit), keyEquivalent: "q"))
+                let quitItem = NSMenuItem(title: "Quit Copilot Context", action: #selector(quit), keyEquivalent: "q")
+                quitItem.target = self
+                menu.addItem(quitItem)
             }
         } catch {
             statusItem.button?.title = "Copilot: —"
             menu.addItem(NSMenuItem(title: "Error reading status: \(error)", action: nil, keyEquivalent: ""))
             menu.addItem(NSMenuItem.separator())
-            menu.addItem(NSMenuItem(title: "Quit Copilot Context", action: #selector(quit), keyEquivalent: "q"))
+            let quitItem = NSMenuItem(title: "Quit Copilot Context", action: #selector(quit), keyEquivalent: "q")
+            quitItem.target = self
+            menu.addItem(quitItem)
         }
     }
 
