@@ -277,32 +277,78 @@ def scan_events_for_initial_snapshot(events_path: Path) -> Dict[str, Any]:
         return snap
 
 
-def follow_events(events_path: Path, snapshot, poll_interval: float = 1.0):
-    """Tail events_path and update snapshot whenever new usage lines appear.
-    This blocks and sleeps between polls until interrupted (KeyboardInterrupt).
-    """
-    write_status_file(snapshot)
+def collect_all_mtimes(state_dir: Path) -> Dict[Path, float]:
+    """Return {events_path: mtime} for every events.jsonl found under state_dir."""
+    result: Dict[Path, float] = {}
     try:
-        with events_path.open('r', encoding='utf-8', errors='replace') as f:
-            # Start at the end of file and tail
-            f.seek(0, os.SEEK_END)
-            while True:
-                line = f.readline()
-                if not line:
-                    time.sleep(poll_interval)
-                    continue
-                # process this line and any immediately-available following lines
-                lines = [line]
-                lines.extend(f.readlines())
-                for ln in lines:
-                    new_snap = process_line(ln, snapshot)
-                    if new_snap.get('updated_at') != snapshot.get('updated_at'):
-                        snapshot = new_snap
-                        write_status_file(snapshot)
-                        print('Updated:', snapshot)
-    except FileNotFoundError:
-        # caller will handle
-        raise
+        for p in state_dir.iterdir():
+            if not p.is_dir():
+                continue
+            ep = p / 'events.jsonl'
+            try:
+                result[ep] = ep.stat().st_mtime
+            except FileNotFoundError:
+                pass
+            except Exception as e:
+                _dprint(f"stat error {ep}: {e}")
+    except Exception as e:
+        _dprint(f"iterdir error {state_dir}: {e}")
+    return result
+
+
+def run_daemon(poll_interval: float = 1.0):
+    """Poll all events.jsonl files in session-state for mtime changes.
+
+    Whenever any file changes (or a new session dir appears), re-locate the
+    active session, re-scan its events.jsonl, and write context_status.json.
+    """
+    # Seed initial mtime map without triggering updates
+    known_mtimes = collect_all_mtimes(COPILOT_STATE)
+    _dprint(f"Watching {len(known_mtimes)} events.jsonl files")
+
+    # Build and write initial snapshot from the current active session
+    session_dir = find_active_session_dir(COPILOT_STATE)
+    snapshot = {'model': None, 'input_tokens': None, 'output_tokens': None,
+                'total_tokens': None, 'percent_used': None, 'timestamp': None}
+    if session_dir:
+        events = find_events_file(session_dir)
+        if events:
+            snapshot = scan_events_for_initial_snapshot(events)
+            write_status_file(snapshot)
+            print('Initial snapshot:', snapshot, flush=True)
+
+    while True:
+        time.sleep(poll_interval)
+
+        current_mtimes = collect_all_mtimes(COPILOT_STATE)
+        changed = False
+        for path, mtime in current_mtimes.items():
+            prev = known_mtimes.get(path)
+            if prev is None:
+                _dprint(f"New events file discovered: {path}")
+                changed = True
+            elif mtime != prev:
+                _dprint(f"Changed: {path} ({prev} -> {mtime})")
+                changed = True
+        known_mtimes = current_mtimes
+
+        if not changed:
+            continue
+
+        session_dir = find_active_session_dir(COPILOT_STATE)
+        if not session_dir:
+            _dprint("No active session dir found after change")
+            continue
+        events = find_events_file(session_dir)
+        if not events:
+            _dprint(f"No events.jsonl in {session_dir}")
+            continue
+
+        new_snap = scan_events_for_initial_snapshot(events)
+        if new_snap != snapshot:
+            snapshot = new_snap
+            write_status_file(snapshot)
+            print('Updated:', snapshot, flush=True)
 
 
 def print_once(events_path: Path, snap):
@@ -329,29 +375,21 @@ def main(argv):
         _dprint(f"COPILOT_STATE={COPILOT_STATE}")
         _dprint(f"STATUS_FILE={STATUS_FILE}")
 
-    session_dir = find_active_session_dir(COPILOT_STATE)
-    if not session_dir:
-        print('No copilot session-state directory found under', COPILOT_STATE)
-        return 2
-
-    events = find_events_file(session_dir)
-    if events:
-        snapshot = scan_events_for_initial_snapshot(events)
-    else:
-        snapshot = {'model': None, 'input_tokens': None, 'output_tokens': None, 'total_tokens': None, 'percent_used': None, 'timestamp': None}
-
     try:
         if once:
+            session_dir = find_active_session_dir(COPILOT_STATE)
+            if not session_dir:
+                print('No copilot session-state directory found under', COPILOT_STATE)
+                return 2
+            events = find_events_file(session_dir)
             if not events:
                 print('No events.jsonl in', session_dir)
                 return 3
+            snapshot = scan_events_for_initial_snapshot(events)
             print_once(events, snapshot)
             return 0
 
-        # Tail the events file until interrupted
-        follow_events(events, snapshot, poll_interval=interval)
-    except FileNotFoundError:
-        print('events.jsonl not found')
+        run_daemon(poll_interval=interval)
     except KeyboardInterrupt:
         print('Stopping...')
 
