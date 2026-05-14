@@ -4,6 +4,14 @@
 .diff-del  { background: #431407; color: #fed7aa; }
 .diff-add::before { content: "+"; }
 .diff-del::before { content: "−"; }
+.diff-inline-add,
+.diff-inline-del {
+  border-radius: 3px;
+  padding: 0 2px;
+  font-weight: 700;
+}
+.diff-inline-add { background: #1e40af; color: #bfdbfe; }
+.diff-inline-del { background: #7c2d12; color: #fed7aa; text-decoration: line-through; }
 .jn    { color: #fbbf24; }
 .js    { color: #93c5fd; }
 .grep-match { background: #312e81; color: #c7d2fe; }

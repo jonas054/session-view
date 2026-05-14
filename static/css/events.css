@@ -211,6 +211,14 @@ details[open] > .tool-summary { border-bottom: 1px solid #e2e8f0; }
 .diff-del  { display: block; background: #450a0a; color: #fca5a5; }
 .diff-hunk { display: block; color: #93c5fd; }
 .diff-meta { display: block; color: #94a3b8; }
+.diff-inline-add,
+.diff-inline-del {
+  border-radius: 3px;
+  padding: 0 2px;
+  font-weight: 700;
+}
+.diff-inline-add { background: #1d4ed8; color: #dbeafe; }
+.diff-inline-del { background: #991b1b; color: #fee2e2; text-decoration: line-through; }
 
 /* ── Grep result ── */
 .grep-block {
