@@ -225,6 +225,23 @@ def _line_similarity(old_line: str, new_line: str) -> float:
     return difflib.SequenceMatcher(None, _line_body(old_line), _line_body(new_line)).ratio()
 
 
+def _best_line_matches(
+    source_lines: list[tuple[int, str]],
+    candidate_lines: list[tuple[int, str]],
+) -> dict[int, tuple[int, float]]:
+    matches = {}
+    for source_idx, source_line in source_lines:
+        best_candidate_idx = -1
+        best_score = -1.0
+        for candidate_idx, candidate_line in candidate_lines:
+            score = _line_similarity(source_line, candidate_line)
+            if score > best_score:
+                best_score = score
+                best_candidate_idx = candidate_idx
+        matches[source_idx] = (best_candidate_idx, best_score)
+    return matches
+
+
 def _align_diff_lines(lines: list[str], similarity_threshold: float = 0.85) -> list[str]:
     """Render a diff line block while pairing the most similar removed/added lines."""
     removed = [(i, line) for i, line in enumerate(lines) if line.startswith("-")]
@@ -237,27 +254,8 @@ def _align_diff_lines(lines: list[str], similarity_threshold: float = 0.85) -> l
             for line in lines
         ]
 
-    best_added_for_removed: dict[int, tuple[int, float]] = {}
-    for r_idx, r_line in removed:
-        best_j = -1
-        best_score = -1.0
-        for a_idx, a_line in added:
-            score = _line_similarity(r_line, a_line)
-            if score > best_score:
-                best_score = score
-                best_j = a_idx
-        best_added_for_removed[r_idx] = (best_j, best_score)
-
-    best_removed_for_added: dict[int, tuple[int, float]] = {}
-    for a_idx, a_line in added:
-        best_i = -1
-        best_score = -1.0
-        for r_idx, r_line in removed:
-            score = _line_similarity(r_line, a_line)
-            if score > best_score:
-                best_score = score
-                best_i = r_idx
-        best_removed_for_added[a_idx] = (best_i, best_score)
+    best_added_for_removed = _best_line_matches(removed, added)
+    best_removed_for_added = _best_line_matches(added, removed)
 
     pair_html: dict[int, tuple[str, str]] = {}
     consumed_added: set[int] = set()
@@ -377,6 +375,24 @@ def build_overview(events: list) -> dict:
 # Build conversation turns
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _empty_turn_state() -> tuple[dict | None, list, list[str], str | None]:
+    return None, [], [], None
+
+
+def _tool_request_text(tool_request: dict) -> str:
+    if tool_request.get("name") == "report_intent":
+        return tool_request.get("arguments", {}).get("intent", "").strip()
+    return (tool_request.get("intentionSummary") or "").strip()
+
+
+def _tool_result_fields(result_data: dict, event_id: str) -> dict:
+    return {
+        "result": result_data.get("result"),
+        "success": result_data.get("success", True),
+        "event_id": event_id,
+    }
+
+
 def build_turns(events: list) -> list:
     """
     Return a list of logical conversation turns.  Each turn is a dict:
@@ -406,10 +422,7 @@ def build_turns(events: list) -> list:
             subagent_ends[cid] = ev
 
     turns = []
-    current_user_msg = None
-    current_steps = []
-    current_text_parts = []
-    current_text_event_id = None  # event id of first assistant.message in current text batch
+    current_user_msg, current_steps, current_text_parts, current_text_event_id = _empty_turn_state()
 
     def flush_text():
         nonlocal current_text_parts, current_text_event_id
@@ -428,10 +441,7 @@ def build_turns(events: list) -> list:
                 "user_message": current_user_msg,
                 "steps": current_steps,
             })
-        current_user_msg = None
-        current_steps = []
-        current_text_parts = []
-        current_text_event_id = None
+        current_user_msg, current_steps, current_text_parts, current_text_event_id = _empty_turn_state()
 
     for ev in events:
         t = ev.get("type", "")
@@ -460,8 +470,9 @@ def build_turns(events: list) -> list:
 
             # Tool requests embedded in the message
             for tr in d.get("toolRequests", []):
+                tool_request_text = _tool_request_text(tr)
                 if tr.get("name") == "report_intent":
-                    intent_text = tr.get("arguments", {}).get("intent", "").strip()
+                    intent_text = tool_request_text
                     if intent_text:
                         flush_text()
                         current_steps.append({"kind": "intent", "content": intent_text, "event_id": ev.get("id", "")})
@@ -482,21 +493,17 @@ def build_turns(events: list) -> list:
                         "arguments": tr.get("arguments", {}),
                         "ts_start": sub_start.get("timestamp"),
                         "ts_end": sub_end.get("timestamp") if sub_end else None,
-                        "result": end_d.get("result"),
-                        "success": end_d.get("success", True),
-                        "event_id": sub_start.get("id", ""),
+                        **_tool_result_fields(end_d, sub_start.get("id", "")),
                     })
                 else:
                     current_steps.append({
                         "kind": "tool",
                         "name": tr.get("name", ""),
                         "arguments": tr.get("arguments", {}),
-                        "intent_summary": tr.get("intentionSummary"),
+                        "intent_summary": tool_request_text,
                         "ts_start": start_ev.get("timestamp"),
                         "ts_end": end_ev.get("timestamp"),
-                        "result": end_d.get("result"),
-                        "success": end_d.get("success", True),
-                        "event_id": start_ev.get("id", "") or end_ev.get("id", ""),
+                        **_tool_result_fields(end_d, start_ev.get("id", "") or end_ev.get("id", "")),
                     })
 
     flush_turn()
@@ -597,6 +604,14 @@ def _highlight_grep_match(text: str, pattern: str) -> str:
         return escape(text)
 
 
+def _render_grep_path_value(path: str, value_html: str) -> str:
+    return (
+        f'<span class="grep-file">{escape(path)}</span>'
+        f'<span class="grep-sep">:</span>'
+        f"{value_html}"
+    )
+
+
 def _render_grep_result(content: str, args) -> str:
     """Colorize ripgrep output based on output mode."""
     if not content or content.strip() in ("No matches found.", ""):
@@ -614,13 +629,9 @@ def _render_grep_result(content: str, args) -> str:
         if mode == "files_with_matches":
             rows.append(f'<span class="grep-file">{escape(line)}</span>')
         elif mode == "count":
-            idx = line.rfind(":")
-            if idx > 0:
-                rows.append(
-                    f'<span class="grep-file">{escape(line[:idx])}</span>'
-                    f'<span class="grep-sep">:</span>'
-                    f'<span class="grep-count">{escape(line[idx+1:])}</span>'
-                )
+            path, sep, count = line.rpartition(":")
+            if sep and path:
+                rows.append(_render_grep_path_value(path, f'<span class="grep-count">{escape(count)}</span>'))
             else:
                 rows.append(escape(line))
         else:  # content
@@ -643,13 +654,9 @@ def _render_grep_result(content: str, args) -> str:
                     rows.append(escape(line))
             else:
                 # filepath:text
-                idx = line.index(":") if ":" in line else -1
-                if idx > 0:
-                    rows.append(
-                        f'<span class="grep-file">{escape(line[:idx])}</span>'
-                        f'<span class="grep-sep">:</span>'
-                        f'{_highlight_grep_match(line[idx+1:], pattern)}'
-                    )
+                path, sep, text = line.partition(":")
+                if sep and path:
+                    rows.append(_render_grep_path_value(path, _highlight_grep_match(text, pattern)))
                 else:
                     rows.append(escape(line))
 
@@ -670,7 +677,7 @@ def _looks_like_unified_diff(text: str) -> bool:
     )
 
 
-def _render_unified_diff_text(text: str) -> str:
+def _render_diff_block(text: str, meta_prefixes: tuple[str, ...]) -> str:
     rows = []
     body = []
 
@@ -681,7 +688,7 @@ def _render_unified_diff_text(text: str) -> str:
             body = []
 
     for line in text.splitlines(keepends=True):
-        if line.startswith(("diff --git ", "index ", "--- ", "+++ ")):
+        if line.startswith(meta_prefixes):
             flush_body()
             rows.append(f'<span class="diff-meta">{escape(line)}</span>')
         elif line.startswith("@@"):
@@ -691,6 +698,10 @@ def _render_unified_diff_text(text: str) -> str:
             body.append(line)
     flush_body()
     return f'<pre class="diff-block">{"".join(rows)}</pre>'
+
+
+def _render_unified_diff_text(text: str) -> str:
+    return _render_diff_block(text, ("diff --git ", "index ", "--- ", "+++ "))
 
 
 def _looks_like_text_with_line_numbers(content: str):
@@ -771,34 +782,18 @@ def _render_edit_diff(old: str, new: str) -> str:
 
 def _render_apply_patch_diff(patch: str) -> str:
     """Render apply_patch input with diff-like highlighting."""
-    rows = []
-    body = []
-
-    def flush_body():
-        nonlocal body
-        if body:
-            rows.extend(_align_diff_lines(body))
-            body = []
-
-    for line in patch.splitlines(keepends=True):
-        if (
-            line.startswith("*** Begin Patch")
-            or line.startswith("*** End Patch")
-            or line.startswith("*** Update File:")
-            or line.startswith("*** Add File:")
-            or line.startswith("*** Delete File:")
-            or line.startswith("*** Move to:")
-            or line.startswith("*** End of File")
-        ):
-            flush_body()
-            rows.append(f'<span class="diff-meta">{escape(line)}</span>')
-        elif line.startswith("@@"):
-            flush_body()
-            rows.append(f'<span class="diff-hunk">{escape(line)}</span>')
-        else:
-            body.append(line)
-    flush_body()
-    return f'<pre class="diff-block">{"".join(rows)}</pre>'
+    return _render_diff_block(
+        patch,
+        (
+            "*** Begin Patch",
+            "*** End Patch",
+            "*** Update File:",
+            "*** Add File:",
+            "*** Delete File:",
+            "*** Move to:",
+            "*** End of File",
+        ),
+    )
 
 
 def _render_sql_query(query: str) -> str:
@@ -824,13 +819,11 @@ def _has_multiline_str(args: dict) -> bool:
 
 
 def _render_args_pretty(args: dict) -> str:
-    """Render args with multiline string values shown as readable text blocks."""
+    """Render args with string values shown as readable text blocks."""
     parts = []
     for k, v in args.items():
         key_html = f'<div class="arg-pretty-key">{escape(k)}</div>'
-        if isinstance(v, str) and "\n" in v:
-            parts.append(f'{key_html}<pre class="arg-pretty-val">{escape(v)}</pre>')
-        elif isinstance(v, str):
+        if isinstance(v, str):
             parts.append(f'{key_html}<pre class="arg-pretty-val">{escape(v)}</pre>')
         else:
             parts.append(f'{key_html}<div class="json-block">{json_html(v)}</div>')
@@ -987,6 +980,22 @@ def _is_block_starter(line: str) -> bool:
     )
 
 
+def _is_list_continuation_line(line: str) -> bool:
+    return line.startswith("  ") or line.startswith("\t")
+
+
+def _consume_markdown_list(lines: list[str], start_idx: int, ordered: bool) -> tuple[list[str], int]:
+    pattern = r"^\d+\.\s" if ordered else r"^[-*+]\s"
+    items = []
+    i = start_idx
+    while i < len(lines) and (
+        re.match(pattern, lines[i]) or (items and _is_list_continuation_line(lines[i]))
+    ):
+        items.append(lines[i])
+        i += 1
+    return items, i
+
+
 def _md_list_items(lines: list, ordered: bool) -> str:
     """Parse flat/indented list lines into <li> elements."""
     tag = "ol" if ordered else "ul"
@@ -1076,21 +1085,13 @@ def markdown_to_html(text: str) -> str:
 
         # ── Unordered list ─────────────────────────────────────────────
         if re.match(r"^[-*+]\s", line):
-            lst: list = []
-            while i < n and (re.match(r"^[-*+]\s", lines[i]) or
-                              (lst and (lines[i].startswith("  ") or lines[i].startswith("\t")))):
-                lst.append(lines[i])
-                i += 1
+            lst, i = _consume_markdown_list(lines, i, ordered=False)
             out.append(_md_list_items(lst, ordered=False))
             continue
 
         # ── Ordered list ───────────────────────────────────────────────
         if re.match(r"^\d+\.\s", line):
-            lst = []
-            while i < n and (re.match(r"^\d+\.\s", lines[i]) or
-                              (lst and (lines[i].startswith("  ") or lines[i].startswith("\t")))):
-                lst.append(lines[i])
-                i += 1
+            lst, i = _consume_markdown_list(lines, i, ordered=True)
             out.append(_md_list_items(lst, ordered=True))
             continue
 
@@ -1258,6 +1259,15 @@ def render_overview(ov: dict) -> str:
     """
 
 
+def _raw_event_link(event_id: str) -> str:
+    if not event_id:
+        return ""
+    return (
+        f'<a class="raw-link" href="#" onclick="goToRaw(\'ev-{escape(event_id)}\');return false;" '
+        'title="View raw event">⌗</a>'
+    )
+
+
 def render_turns(turns: list) -> str:
     parts = []
     for i, turn in enumerate(turns):
@@ -1269,7 +1279,7 @@ def render_turns(turns: list) -> str:
         if um:
             ts_str = fmt_ts(um.get("timestamp", ""))
             ev_id = um.get("event_id", "")
-            raw_link = f'<a class="raw-link" href="#" onclick="goToRaw(\'ev-{escape(ev_id)}\');return false;" title="View raw event">⌗</a>' if ev_id else ""
+            raw_link = _raw_event_link(ev_id)
             content = um["content"]
             skill_match = re.match(r'\s*<skill-context\s+name=["\']?([^"\'>\s]+)["\']?', content, re.IGNORECASE)
             if skill_match:
@@ -1320,7 +1330,7 @@ def render_steps(steps: list, turn_idx: int) -> str:
         kind = step.get("kind")
         step_id = f"step-{turn_idx}-{j}"
         ev_id = step.get("event_id", "")
-        raw_link = f'<a class="raw-link" href="#" onclick="goToRaw(\'ev-{escape(ev_id)}\');return false;" title="View raw event">⌗</a>' if ev_id else ""
+        raw_link = _raw_event_link(ev_id)
 
         if kind == "reasoning":
             if len(step["content"].strip()) < 200 and "\n" not in step["content"].strip():
@@ -1586,13 +1596,9 @@ def read_session(session_dir: Path) -> dict:
                         parts.append(text)
                     # embedded tool requests (e.g., report_intent) inside assistant messages
                     for tr in data.get("toolRequests", []):
-                        if tr.get("name") == "report_intent":
-                            intent_text = tr.get("arguments", {}).get("intent", "").strip()
-                            if intent_text:
-                                parts.append(intent_text)
-                        else:
-                            if tr.get("intentionSummary"):
-                                parts.append(tr.get("intentionSummary"))
+                        tool_request_text = _tool_request_text(tr)
+                        if tool_request_text:
+                            parts.append(tool_request_text)
 
                 elif not info["model"] and "model" in data:
                     info["model"] = data["model"]
