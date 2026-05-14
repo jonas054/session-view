@@ -865,12 +865,14 @@ def render_args(args, tool_name: str = "") -> str:
             return f'<span class="arg-inline"><span class="arg-key">{escape(k)}</span>: <span class="arg-val">{escape(v)}</span></span>'
     if _has_multiline_str(args):
         return _render_args_pretty(args)
-    if tool_name == "grep" and args.get("output_mode") == "content" and args.keys() - {"-i", "head_limit", "paths"} == {"pattern", "output_mode"}:
+    if tool_name == "grep" and args.get("output_mode") == "content" and args.keys() - {"-i", "-n", "head_limit", "paths", "path"} == {"pattern", "output_mode"}:
+        paths = args.get("paths") or ([args.get("path")] if args.get("path") else [])
         command = " ".join([
             'grep',
+            '-n' if args.get("-n") else '',
             '-i' if args.get("-i") else '',
             escape("'" + args.get("pattern", "") + "'"),
-            " ".join(args.get("paths")) if args.get("paths") else escape('<files>'),
+            " ".join(paths) if len(paths) > 0 else escape('<files>'),
             f'| head -n {escape(str(args.get("head_limit", "")))}' if args.get("head_limit") else '',
         ]).replace("  ", " ").strip()
         return f'<pre class="result-pre">{command}</pre>'
