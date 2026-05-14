@@ -59,12 +59,16 @@ _COPILOT_IMG = f'<img src="{_FAVICON_URI}" style="height:1.5em;vertical-align:mi
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+import time
+
 def parse_ts(ts_str: str) -> datetime:
     if not ts_str:
         return None
     ts_str = ts_str.rstrip("Z")
     try:
-        return datetime.fromisoformat(ts_str).replace(tzinfo=timezone.utc)
+        dt_utc = datetime.fromisoformat(ts_str).replace(tzinfo=timezone.utc)
+        # Convert to local time using system settings
+        return dt_utc.astimezone()
     except ValueError:
         return None
 
@@ -983,7 +987,7 @@ def markdown_to_html(text: str) -> str:
 
 def render_overview(ov: dict) -> str:
     dt_start = parse_ts(ov["start_time"])
-    date_str = dt_start.strftime("%A, %B %-d %Y at %H:%M UTC") if dt_start else "unknown"
+    date_str = dt_start.strftime("%A, %B %-d %Y at %H:%M %Z") if dt_start else "unknown"
 
     # Model metrics table
     metrics_html = ""
@@ -1550,7 +1554,7 @@ def build_overview_html(sessions: list) -> str:
     data_json = json.dumps(data, ensure_ascii=False)
     js = COMMON_JS + OVERVIEW_JS.replace("__DATA__", data_json)
     count = len(sessions)
-    generated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    generated = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -1606,13 +1610,28 @@ def generate_overview() -> None:
 
     print(f"Found {len(paths)} session(s) for overview…", file=sys.stderr)
 
+    summaries_path = Path.home() / ".copilot" / "session-summaries.json"
+
+    # Load previously persisted summaries
     summaries: dict = {}
+    try:
+        summaries = json.loads(summaries_path.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+
+    # Merge in any new summaries from the session store DB
     db_path = Path.home() / ".copilot" / "session-store.db"
     try:
         conn = sqlite3.connect(str(db_path))
         for row in conn.execute("SELECT id, summary FROM sessions WHERE summary IS NOT NULL"):
             summaries[row[0]] = row[1]
         conn.close()
+    except Exception:
+        pass
+
+    # Persist the merged summaries back to the JSON file
+    try:
+        summaries_path.write_text(json.dumps(summaries, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
         pass
 
