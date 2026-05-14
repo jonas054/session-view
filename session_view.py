@@ -30,6 +30,7 @@ import html
 import json
 import os
 import re
+import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1492,6 +1493,7 @@ def build_overview_html(sessions: list) -> str:
             "activity_total": s["user_prompt_count"] + s["intent_count"],
             "premium_requests": s["total_premium_requests"] or 0,
             "has_story": s["has_story"],
+            "summary": s.get("summary", ""),
             "prompt": s["first_prompt"],
             "search": s.get("search_text", ""),
             "link": str(s["events_html"]),
@@ -1579,7 +1581,8 @@ def build_overview_html(sessions: list) -> str:
             <th data-col="3" title="user prompts + agent intents">Prompts+Intents <span class="sort-ind"> ↕</span></th>
             <th data-col="4" title="premium requests used">✨ <span class="sort-ind"> ↕</span></th>
             <th data-col="5" title="story available">📖 <span class="sort-ind"> ↕</span></th>
-            <th data-col="6">First prompt <span class="sort-ind"> ↕</span></th>
+            <th data-col="6">Summary <span class="sort-ind"> ↕</span></th>
+            <th data-col="7">First prompt <span class="sort-ind"> ↕</span></th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -1603,10 +1606,21 @@ def generate_overview() -> None:
 
     print(f"Found {len(paths)} session(s) for overview…", file=sys.stderr)
 
+    summaries: dict = {}
+    db_path = Path.home() / ".copilot" / "session-store.db"
+    try:
+        conn = sqlite3.connect(str(db_path))
+        for row in conn.execute("SELECT id, summary FROM sessions WHERE summary IS NOT NULL"):
+            summaries[row[0]] = row[1]
+        conn.close()
+    except Exception:
+        pass
+
     sessions = []
     for p in paths:
         session_dir = Path(p).parent
         info = read_session(session_dir)
+        info["summary"] = summaries.get(info["id"], "")
         sessions.append(info)
 
     sessions.sort(key=lambda s: s["start_time"] or "", reverse=True)

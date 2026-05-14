@@ -1,5 +1,5 @@
 const DATA = __DATA__;
-let sortCol = 0;   // 0=ts, 1=cwd, 2=model, 3=activity, 4=premium, 5=story, 6=prompt
+let sortCol = 0;   // 0=ts, 1=cwd, 2=model, 3=activity, 4=premium, 5=story, 6=summary, 7=prompt
 let sortAsc = false;
 let query = '';
 const collapsed = new Set();
@@ -11,6 +11,7 @@ function getGroupKey(item, col) {
   if (col === 3) return String(item.activity_total);
   if (col === 4) return String(item.premium_requests || 0);
   if (col === 5) return item.has_story ? 'yes' : 'no';
+  if (col === 6) return item.summary || '-';
   const words = (item.prompt || '').trim().split(/\\s+/);
   return words.slice(0, 6).join(' ') + (words.length > 6 ? '…' : '') || '(empty)';
 }
@@ -22,7 +23,8 @@ function getSortVal(item, col) {
   if (col === 3) return item.activity_total;
   if (col === 4) return item.premium_requests || 0;
   if (col === 5) return item.has_story ? 1 : 0;
-  if (col === 6) return (item.prompt || '').toLowerCase();
+  if (col === 6) return (item.summary || '').toLowerCase();
+  if (col === 7) return (item.prompt || '').toLowerCase();
   return '';
 }
 
@@ -105,10 +107,11 @@ function render() {
   const filtered = DATA.filter(item =>
     !q ||
     item.ts.includes(q) ||
-    (item.cwd    || '').toLowerCase().includes(q) ||
-    (item.model  || '').toLowerCase().includes(q) ||
-    (item.prompt || '').toLowerCase().includes(q) ||
-    (item.search || '').toLowerCase().includes(q)
+    (item.cwd     || '').toLowerCase().includes(q) ||
+    (item.model   || '').toLowerCase().includes(q) ||
+    (item.summary || '').toLowerCase().includes(q) ||
+    (item.prompt  || '').toLowerCase().includes(q) ||
+    (item.search  || '').toLowerCase().includes(q)
   );
 
   filtered.sort((a, b) => {
@@ -140,7 +143,7 @@ function render() {
       tr.className = 'group-header';
       tr.dataset.group = gk;
       tr.innerHTML =
-        `<td colspan="7">` +
+        `<td colspan="8">` +
         `<span class="group-toggle">${isCollapsed ? '▶' : '▼'}</span> ` +
         `<strong>${escHtml(gk)}</strong>` +
         `<span class="group-count">${cnt} session${cnt === 1 ? '' : 's'}</span></td>`;
@@ -164,6 +167,7 @@ function render() {
         `<td class="activity" title="user prompts + agent intents">${escHtml(item.activity)}</td>` +
         `<td class="premium-requests num" title="premium requests">${item.premium_requests ? escHtml(String(item.premium_requests)) : ''}</td>` +
         `<td class="story-indicator" title="${item.has_story ? 'Story available' : 'No story'}"><a href="${escHtml(storyHref)}">${item.has_story ? '📖' : ''}</a></td>` +
+        `<td class="summary">${item.summary ? escHtml(item.summary) : '<em>-</em>'}</td>` +
         `<td class="prompt"><a href="${escHtml(sessionHref)}">${promptHtml}</a></td>`;
       makeRowClickable(tr, sessionHref);
       frag.appendChild(tr);
@@ -177,7 +181,7 @@ function render() {
         if (snippet) {
           const sTr = document.createElement('tr');
           sTr.className = 'snippet-row';
-          sTr.innerHTML = `<td colspan="7">${snippet}</td>`;
+          sTr.innerHTML = `<td colspan="8">${snippet}</td>`;
           makeRowClickable(sTr, sessionHref);
           frag.appendChild(sTr);
         }
@@ -231,10 +235,11 @@ document.getElementById('btn-collapse').addEventListener('click', () => {
   DATA.filter(item =>
     !q ||
     item.ts.includes(q) ||
-    (item.cwd    || '').toLowerCase().includes(q) ||
-    (item.model  || '').toLowerCase().includes(q) ||
-    (item.prompt || '').toLowerCase().includes(q) ||
-    (item.search || '').toLowerCase().includes(q)
+    (item.cwd     || '').toLowerCase().includes(q) ||
+    (item.model   || '').toLowerCase().includes(q) ||
+    (item.summary || '').toLowerCase().includes(q) ||
+    (item.prompt  || '').toLowerCase().includes(q) ||
+    (item.search  || '').toLowerCase().includes(q)
   ).forEach(item => {
     const gk = getGroupKey(item, sortCol);
     if (gk !== null) collapsed.add(gk);
