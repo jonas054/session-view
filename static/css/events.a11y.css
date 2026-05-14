@@ -1,5 +1,8 @@
 .badge-success { color: #2563eb; }
 .badge-fail    { color: #ea580c; }
+.added  { color: #2563eb; }
+.removed { color: #ea580c; }
+.copy-btn-ok { color: #2563eb !important; background: #dbeafe !important; }
 .diff-add  { background: #1e3a5f; color: #93c5fd; }
 .diff-del  { background: #431407; color: #fed7aa; }
 .diff-add::before { content: "+"; }
