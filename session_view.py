@@ -38,6 +38,75 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 
+def _home_dir() -> Path:
+    return Path.home()
+
+
+def _copilot_dir() -> Path:
+    return _home_dir() / ".copilot"
+
+
+def _session_state_dir() -> Path:
+    return _copilot_dir() / "session-state"
+
+
+def _overview_output_path() -> Path:
+    return _session_state_dir() / "sessions-overview.html"
+
+
+def _session_events_glob() -> str:
+    return str(_session_state_dir() / "*" / "events.jsonl")
+
+
+def _session_html_glob() -> str:
+    return str(_session_state_dir() / "*" / "events.html")
+
+
+def _session_summaries_path() -> Path:
+    return _copilot_dir() / "session-summaries.json"
+
+
+def _session_store_db_path() -> Path:
+    return _copilot_dir() / "session-store.db"
+
+
+def _current_username() -> str:
+    try:
+        return os.getlogin()
+    except OSError:
+        return os.getenv("USER") or os.getenv("USERNAME") or "unknown"
+
+
+def _run_story_command(cmd):
+    return _subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+
+
+def _static_assets_mtime() -> float:
+    assets_mtime = 0.0
+    try:
+        assets_root = HERE.joinpath("static")
+        if assets_root.exists():
+            for p in assets_root.rglob("*"):
+                if p.is_file():
+                    assets_mtime = max(assets_mtime, p.stat().st_mtime)
+    except Exception:
+        assets_mtime = 0.0
+    return assets_mtime
+
+
+def _effective_source_mtime() -> float:
+    return max(os.path.getmtime(__file__), _static_assets_mtime())
+
+
+def _resolve_input_path(input_arg: str) -> str:
+    input_path = os.path.expanduser(input_arg)
+    if not os.path.exists(input_path):
+        candidate = _session_state_dir() / input_arg / "events.jsonl"
+        if candidate.is_file():
+            input_path = str(candidate)
+    return input_path
+
+
 def _load_asset_text(relpath: str) -> str:
     p = HERE.joinpath(relpath)
     try:
@@ -1460,7 +1529,7 @@ def render_html(overview: dict, turns: list, events: list, source_path: str, a11
     raw_html = render_raw_events(events)
 
     filename = os.path.basename(source_path)
-    overview_link = str(OVERVIEW_OUTPUT)
+    overview_link = str(_overview_output_path())
     extra_css = CSS_A11Y if a11y else ""
 
     # Story tab
@@ -1530,7 +1599,6 @@ def render_html(overview: dict, turns: list, events: list, source_path: str, a11
 # Sessions overview
 # ─────────────────────────────────────────────────────────────────────────────
 
-OVERVIEW_OUTPUT = Path.home() / ".copilot" / "session-state" / "sessions-overview.html"
 OVERVIEW_CSS = _load_asset_text("static/css/overview.css")
 OVERVIEW_JS = _load_asset_text("static/js/overview.js")
 
@@ -1743,7 +1811,7 @@ def build_overview_html(sessions: list) -> str:
 
 
 def generate_overview() -> None:
-    pattern = str(Path.home() / ".copilot" / "session-state" / "*" / "events.html")
+    pattern = _session_html_glob()
     paths = sorted(_glob.glob(pattern))
 
     if not paths:
@@ -1752,7 +1820,7 @@ def generate_overview() -> None:
 
     print(f"Found {len(paths)} session(s) for overview…", file=sys.stderr)
 
-    summaries_path = Path.home() / ".copilot" / "session-summaries.json"
+    summaries_path = _session_summaries_path()
 
     # Load previously persisted summaries
     summaries: dict = {}
@@ -1762,7 +1830,7 @@ def generate_overview() -> None:
         pass
 
     # Merge in any new summaries from the session store DB
-    db_path = Path.home() / ".copilot" / "session-store.db"
+    db_path = _session_store_db_path()
     try:
         conn = sqlite3.connect(str(db_path))
         for row in conn.execute("SELECT id, summary FROM sessions WHERE summary IS NOT NULL"):
@@ -1788,17 +1856,15 @@ def generate_overview() -> None:
 
     html_content = build_overview_html(sessions)
 
-    OVERVIEW_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OVERVIEW_OUTPUT.write_text(html_content, encoding="utf-8")
-    print(OVERVIEW_OUTPUT)
+    overview_output = _overview_output_path()
+    overview_output.parent.mkdir(parents=True, exist_ok=True)
+    overview_output.write_text(html_content, encoding="utf-8")
+    print(overview_output)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
-
-DEFAULT_GLOB = "~/.copilot/session-state/*/events.jsonl"
-
 
 import subprocess as _subprocess
 
@@ -1816,7 +1882,7 @@ def _parse_json_events(jsonl_path: str) -> None:
         events = [json.loads(line) for line in f]
 
     with open(_parsed_json_path(jsonl_path), 'w', encoding='utf-8') as f:
-        user_name = os.getlogin()
+        user_name = _current_username()
         heading = f"Session with user '{user_name}' and Copilot\n\n"
         f.write(heading)
         for i, event in enumerate(events):
@@ -1899,7 +1965,7 @@ def generate_story(jsonl_path: str, force: bool = False, language: str = None) -
     cmd = ["copilot", "--yolo", f"--model={model}", "--prompt", prompt]
     print(f"  ✦ Generating story…", end=" ", flush=True)
     try:
-        result = _subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        result = _run_story_command(cmd)
         if result.returncode != 0:
             print(f"failed (exit {result.returncode})")
             if result.stderr:
@@ -1966,7 +2032,7 @@ def main():
     )
     parser.add_argument(
         "input", nargs="?", default=None,
-        help=f"Path to events.jsonl (default: glob {DEFAULT_GLOB})",
+        help=f"Path to events.jsonl (default: glob {_session_events_glob()})",
     )
     parser.add_argument(
         "--a11y", default=False, action="store_true",
@@ -1986,29 +2052,11 @@ def main():
     )
     args = parser.parse_args()
 
-    _self_mtime = os.path.getmtime(__file__)
-    # Consider static assets' modification time so updates to static/*/ trigger re-generation
-    assets_mtime = 0
-    try:
-        assets_root = HERE.joinpath('static')
-        if assets_root.exists():
-            for p in assets_root.rglob('*'):
-                if p.is_file():
-                    assets_mtime = max(assets_mtime, p.stat().st_mtime)
-    except Exception:
-        assets_mtime = 0
-    _effective_self_mtime = max(_self_mtime, assets_mtime)
+    effective_source_mtime = _effective_source_mtime()
 
     if args.input:
         # ── Single file mode ──────────────────────────────────────────
-        input_path = os.path.expanduser(args.input)
-        # Accept a bare session ID: resolve to the canonical events.jsonl path
-        if not os.path.exists(input_path):
-            candidate = os.path.expanduser(
-                f"~/.copilot/session-state/{args.input}/events.jsonl"
-            )
-            if os.path.isfile(candidate):
-                input_path = candidate
+        input_path = _resolve_input_path(args.input)
         if not os.path.isfile(input_path):
             print(f"Error: file not found: {input_path}", file=sys.stderr)
             sys.exit(1)
@@ -2021,7 +2069,7 @@ def main():
         output_path = os.path.join(os.path.dirname(input_path), "events.html")
         if os.path.exists(output_path) and not args.story:
             out_mtime = os.path.getmtime(output_path)
-            if os.path.getmtime(input_path) <= out_mtime and _effective_self_mtime <= out_mtime:
+            if os.path.getmtime(input_path) <= out_mtime and effective_source_mtime <= out_mtime:
                 print(f"Up to date: {output_path}")
                 return
         process_file(input_path, output_path, a11y=args.a11y, story=args.story, force=args.force, language=args.language)
@@ -2032,10 +2080,10 @@ def main():
         if args.story:
             print("Error: --story is not valid in batch mode.", file=sys.stderr)
             sys.exit(1)
-        pattern = os.path.expanduser(DEFAULT_GLOB)
+        pattern = _session_events_glob()
         paths = sorted(_glob.glob(pattern))
         if not paths:
-            print(f"No files matched: {DEFAULT_GLOB}", file=sys.stderr)
+            print(f"No files matched: {pattern}", file=sys.stderr)
             sys.exit(1)
         print(f"Processing {len(paths)} session file(s)…")
         ok = skipped = generated = 0
@@ -2043,7 +2091,7 @@ def main():
             out = os.path.join(os.path.dirname(p), "events.html")
             if os.path.exists(out):
                 out_mtime = os.path.getmtime(out)
-                if os.path.getmtime(p) <= out_mtime and _effective_self_mtime <= out_mtime:
+                if os.path.getmtime(p) <= out_mtime and effective_source_mtime <= out_mtime:
                     skipped += 1
                     continue
             try:

@@ -1,0 +1,3 @@
+{"id":"story-1","timestamp":"2026-05-16T10:00:00Z","type":"session.start","data":{"sessionId":"internal-story-session","copilotVersion":"1.0.48","selectedModel":"gpt-5.4","context":{"cwd":"/tmp/example/project","branch":"main","headCommit":"abcdef1234567890","repository":"jonas054/session-view"}}}
+{"id":"story-2","timestamp":"2026-05-16T10:00:01Z","type":"user.message","data":{"content":"Read the Copilot session below and write a text in English","interactionId":"int-story"}}
+{"id":"story-3","timestamp":"2026-05-16T10:00:02Z","type":"session.shutdown","data":{"shutdownType":"success","totalPremiumRequests":0,"totalApiDurationMs":10,"codeChanges":{"filesModified":[],"linesAdded":0,"linesRemoved":0},"modelMetrics":{}}}
