@@ -58,6 +58,11 @@ def rich_session_dir(write_session_fixture) -> Path:
 
 
 @pytest.fixture
+def ask_user_session_dir(write_session_fixture) -> Path:
+    return write_session_fixture("ask-user-session.jsonl", session_id="ask-user-session")
+
+
+@pytest.fixture
 def create_session_store_db(isolated_home):
     def _create(rows: dict[str, str]) -> Path:
         db_path = isolated_home / ".copilot" / "session-store.db"

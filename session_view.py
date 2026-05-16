@@ -806,6 +806,105 @@ def _render_text_with_line_numbers(content: str) -> str:
     return f'<pre class="result-pre">{"".join(rows)}</pre>'
 
 
+_ASK_USER_RESULT_PREFIX_RE = re.compile(r"^\s*User\s+(?:selected|answered|responded):\s*", re.IGNORECASE)
+
+
+def _normalize_inline_text(text: str) -> str:
+    return re.sub(r"\s+", " ", str(text or "")).strip()
+
+
+def _extract_result_text(result) -> str:
+    if result is None:
+        return ""
+    if isinstance(result, dict):
+        text = result.get("content") or result.get("detailedContent")
+        return text if isinstance(text, str) else ""
+    return str(result)
+
+
+def _parse_ask_user_state(args, result) -> dict:
+    question = ""
+    choices = []
+    allow_freeform = False
+    if isinstance(args, dict):
+        question = str(args.get("question", "") or "").strip()
+        raw_choices = args.get("choices") or []
+        if isinstance(raw_choices, list):
+            choices = [str(choice) for choice in raw_choices if choice is not None]
+        allow_freeform = bool(args.get("allow_freeform"))
+
+    raw_answer = _normalize_inline_text(_extract_result_text(result))
+    answer = _ASK_USER_RESULT_PREFIX_RE.sub("", raw_answer).strip()
+    normalized_answer = _normalize_inline_text(answer).casefold()
+
+    selected_choice = ""
+    if normalized_answer:
+        for choice in choices:
+            if _normalize_inline_text(choice).casefold() == normalized_answer:
+                selected_choice = choice
+                break
+
+    return {
+        "question": question,
+        "choices": choices,
+        "allow_freeform": allow_freeform,
+        "answer": answer,
+        "selected_choice": selected_choice,
+        "custom_answer": answer if answer and not selected_choice else "",
+    }
+
+
+def _ask_user_summary(args, result) -> tuple[str, str]:
+    state = _parse_ask_user_state(args, result)
+    question = abbreviate(_normalize_inline_text(state["question"]), max_len=90)
+    answer = state["selected_choice"] or state["custom_answer"]
+    return question, abbreviate(_normalize_inline_text(answer), max_len=60)
+
+
+def _render_ask_user_interaction(args, result) -> str:
+    state = _parse_ask_user_state(args, result)
+    parts = ['<div class="ask-user-panel">']
+
+    if state["question"]:
+        parts.append(
+            '<div class="ask-user-question-label">Question</div>'
+            f'<div class="ask-user-question">{_md_inline(state["question"])}</div>'
+        )
+
+    if state["choices"]:
+        items = []
+        for choice in state["choices"]:
+            selected = choice == state["selected_choice"]
+            choice_class = "ask-user-choice ask-user-choice-selected" if selected else "ask-user-choice"
+            badge = '<span class="ask-user-choice-badge">✓ Selected</span>' if selected else ""
+            items.append(
+                f'<li class="{choice_class}">'
+                f'<span class="ask-user-choice-label">{_md_inline(choice)}</span>'
+                f"{badge}"
+                "</li>"
+            )
+        parts.append(
+            '<div class="ask-user-choices-label">Choices</div>'
+            f'<ul class="ask-user-choices">{"".join(items)}</ul>'
+        )
+
+    if state["custom_answer"]:
+        note = (
+            '<div class="ask-user-answer-note">Custom answer allowed</div>'
+            if state["allow_freeform"] else ""
+        )
+        parts.append(
+            '<div class="ask-user-answer-label">Answer</div>'
+            '<div class="ask-user-answer">'
+            f'<div class="ask-user-answer-text">{_md_inline(state["custom_answer"])}</div>'
+            f"{note}"
+            "</div>"
+        )
+
+    parts.append("</div>")
+    return "".join(parts)
+
+
 def _render_result_text(content: str, tool_name: str = "", args=None) -> str:
     if tool_name == "grep":
         return _render_grep_result(content, args)
@@ -824,7 +923,7 @@ def render_tool_result(result, tool_name: str = "", args=None) -> str:
     if result is None:
         return "<em>No result</em>"
     if isinstance(result, dict):
-        text = result.get("content") or result.get("detailedContent")
+        text = _extract_result_text(result)
         if text:
             return _render_result_text(text, tool_name, args)
         return f'<div class="json-block">{json_html(result)}</div>'
@@ -879,7 +978,136 @@ def _render_sql_query(query: str) -> str:
             out.append(f'<span class="sql-kw">{escape(token)}</span>')
         pos = m.end()
     out.append(escape(query[pos:]))
-    return f'<div class="code-block sql-block">{"".join(out)}</div>'
+    query_html = f'<div class="code-block sql-block">{"".join(out)}</div>'
+    table_html = _render_sql_insert_values_table(query)
+    return query_html + table_html if table_html else query_html
+
+
+def _split_sql_csv(text: str) -> list[str] | None:
+    items: list[str] = []
+    current: list[str] = []
+    quote = ""
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if quote:
+            current.append(ch)
+            if ch == quote:
+                if i + 1 < len(text) and text[i + 1] == quote:
+                    current.append(text[i + 1])
+                    i += 1
+                else:
+                    quote = ""
+        else:
+            if ch in {"'", '"'}:
+                quote = ch
+                current.append(ch)
+            elif ch == ",":
+                item = "".join(current).strip()
+                if not item:
+                    return None
+                items.append(item)
+                current = []
+            else:
+                current.append(ch)
+        i += 1
+
+    if quote:
+        return None
+    item = "".join(current).strip()
+    if not item:
+        return None
+    items.append(item)
+    return items
+
+
+def _parse_sql_values_tuples(text: str) -> list[list[str]] | None:
+    rows: list[list[str]] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        while i < n and text[i].isspace():
+            i += 1
+        if i >= n:
+            break
+        if text[i] == ",":
+            i += 1
+            continue
+        if text[i] != "(":
+            return None
+
+        i += 1
+        depth = 0
+        quote = ""
+        current: list[str] = []
+        while i < n:
+            ch = text[i]
+            if quote:
+                current.append(ch)
+                if ch == quote:
+                    if i + 1 < n and text[i + 1] == quote:
+                        current.append(text[i + 1])
+                        i += 1
+                    else:
+                        quote = ""
+            else:
+                if ch in {"'", '"'}:
+                    quote = ch
+                    current.append(ch)
+                elif ch == "(":
+                    depth += 1
+                    current.append(ch)
+                elif ch == ")":
+                    if depth == 0:
+                        break
+                    depth -= 1
+                    current.append(ch)
+                else:
+                    current.append(ch)
+            i += 1
+        else:
+            return None
+
+        values = _split_sql_csv("".join(current))
+        if not values:
+            return None
+        rows.append(values)
+        i += 1
+
+    return rows or None
+
+
+def _sql_display_value(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"', "`"}:
+        inner = value[1:-1]
+        if value[0] == "'":
+            return inner.replace("''", "'")
+        if value[0] == '"':
+            return inner.replace('""', '"')
+        return inner
+    if value.startswith("[") and value.endswith("]"):
+        return value[1:-1]
+    return value
+
+
+def _render_sql_insert_values_table(query: str) -> str:
+    m = re.match(
+        r"(?is)^\s*INSERT(?:\s+OR\s+\w+)?\s+INTO\s+.+?\((?P<columns>[^)]+)\)\s+VALUES\s*(?P<values>.+?)\s*;?\s*$",
+        query,
+    )
+    if not m:
+        return ""
+
+    columns = _split_sql_csv(m.group("columns"))
+    rows = _parse_sql_values_tuples(m.group("values"))
+    if not columns or not rows or any(len(row) != len(columns) for row in rows):
+        return ""
+
+    return _render_html_table(
+        [_sql_display_value(column) for column in columns],
+        [[_sql_display_value(value) for value in row] for row in rows],
+    )
 
 
 def _has_multiline_str(args: dict) -> bool:
@@ -1033,6 +1261,20 @@ def _md_table(lines: list) -> str:
         '<div class="md-table-wrap">'
         f'<table class="md-table"><thead>{thead}</thead>'
         f'<tbody>{"".join(tbody_rows)}</tbody></table>'
+        '</div>'
+    )
+
+
+def _render_html_table(headers: list[str], rows: list[list[str]]) -> str:
+    thead = "<tr>" + "".join(f"<th>{_md_inline(cell)}</th>" for cell in headers) + "</tr>"
+    tbody = "".join(
+        "<tr>" + "".join(f"<td>{_md_inline(cell)}</td>" for cell in row) + "</tr>"
+        for row in rows
+    )
+    return (
+        '<div class="md-table-wrap">'
+        f'<table class="md-table"><thead>{thead}</thead>'
+        f'<tbody>{tbody}</tbody></table>'
         '</div>'
     )
 
@@ -1474,11 +1716,25 @@ def render_steps(steps: list, turn_idx: int) -> str:
             args = step.get("arguments", {})
             result = step.get("result")
 
+            answer_html = ""
+            if name == "ask_user":
+                summary, selected_answer = _ask_user_summary(args, result)
+                if selected_answer:
+                    answer_html = f'<span class="ask-user-summary-answer">{escape(selected_answer)}</span>'
+
             status_badge = (
                 '<span class="badge-success">✓</span>' if success
                 else '<span class="badge-fail">✗</span>'
             )
             summary_html = f'<span class="tool-intent">{escape(summary)}</span>' if summary else ""
+            body_html = (
+                _render_ask_user_interaction(args, result)
+                if name == "ask_user"
+                else (
+                    f'{render_args_with_header(args, name) if name != "view" else ""}'
+                    f'{("<div class=\"tool-section-label\">Result</div>" + render_tool_result(result, name, args)) if result is not None else ""}'
+                )
+            )
 
             parts.append(f"""
             <details class="tool-step" id="{step_id}">
@@ -1486,13 +1742,13 @@ def render_steps(steps: list, turn_idx: int) -> str:
                 <span class="tool-icon">{icon}</span>
                 <span class="tool-name">{escape(name)}</span>
                 {summary_html}
+                {answer_html}
                 {status_badge}
                 <span class="tool-meta">{ts_s} → {ts_e}</span>
                 {raw_link}
               </summary>
               <div class="tool-body">
-                {render_args_with_header(args, name) if name != "view" else ""}
-                {('<div class="tool-section-label">Result</div>' + render_tool_result(result, name, args)) if result is not None else ''}
+                {body_html}
               </div>
             </details>""")
 
@@ -1622,6 +1878,7 @@ def read_session(session_dir: Path) -> dict:
     info["has_story"] = (session_dir / "story.txt").exists()
 
     parts = []
+    ask_user_calls = set()
 
     jsonl_path = session_dir / "events.jsonl"
     if not jsonl_path.exists():
@@ -1672,8 +1929,27 @@ def read_session(session_dir: Path) -> dict:
                     info["model"] = data["model"]
 
                 elif etype == "tool.execution_start":
-                    if data.get("toolName") == "report_intent" and data.get("arguments", {}).get("intent"):
+                    tool_name = data.get("toolName")
+                    if tool_name == "report_intent" and data.get("arguments", {}).get("intent"):
                         info["intent_count"] += 1
+                    elif tool_name == "ask_user":
+                        args = data.get("arguments", {})
+                        question = args.get("question", "")
+                        if question:
+                            parts.append(str(question))
+                        choices = args.get("choices", [])
+                        if isinstance(choices, list):
+                            parts.extend(str(choice) for choice in choices if choice is not None)
+                        tool_call_id = data.get("toolCallId")
+                        if tool_call_id:
+                            ask_user_calls.add(tool_call_id)
+
+                elif etype == "tool.execution_complete":
+                    tool_call_id = data.get("toolCallId")
+                    if tool_call_id in ask_user_calls:
+                        answer = _parse_ask_user_state({}, data.get("result")).get("answer")
+                        if answer:
+                            parts.append(answer)
 
                 elif etype == "session.shutdown":
                     info["total_premium_requests"] = data.get("totalPremiumRequests", 0)

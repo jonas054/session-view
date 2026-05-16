@@ -33,6 +33,7 @@ It reads `~/.copilot/session-state/*/events.jsonl` and produces:
 | Session overview | Metadata derived from events: cwd, branch, timings, model usage, code changes, tools, intents, prompts. |
 | Turn | A logical conversation unit: one user message plus the assistant steps that follow. |
 | Assistant step | One rendered item inside a turn: text, reasoning, tool call, or sub-agent activity. |
+| Interactive question | An `ask_user` assistant step that presents a question, may offer predefined choices, and records the user's answer. |
 | Story | A cached, text-to-speech-friendly narrative generated from parsed session events. |
 | Search text | Flattened text collected from prompts, replies, reasoning, and intents for overview filtering. |
 
@@ -75,7 +76,7 @@ It reads `~/.copilot/session-state/*/events.jsonl` and produces:
 8. Internal story-generation sessions are hidden from the overview when their first prompt starts with `Read the Copilot session`.
 9. Tool output rendering is type-aware: diffs, SQL, grep-style results, line-numbered `view` output, and markdown-capable agent output each have custom presentation rules.
 10. Assistant reasoning may contain markdown and should keep rich formatting.
-11. Multiline tool arguments must stay readable; bash, SQL, edit diffs, and `apply_patch` get special handling.
+11. Multiline tool arguments must stay readable; bash, SQL, edit diffs, and `apply_patch` get special handling, and bulk SQL `VALUES` inserts may be rendered as tables.
 12. The accessible mode (`--a11y`) is a palette override, not a separate rendering pipeline.
 
 ## File map
