@@ -263,6 +263,10 @@ details[open] > .tool-summary { border-bottom: 1px solid #e2e8f0; }
   margin-bottom: 6px;
 }
 
+.ask-user-choices-label {
+  margin-top: 6px;
+}
+
 .ask-user-question {
   color: #4c0519;
   font-size: 14px;
