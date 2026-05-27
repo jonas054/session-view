@@ -2188,12 +2188,29 @@ def _parse_json_events(jsonl_path: str) -> None:
                 f.write(f"Event {i}: TOOL COMPLETE: {result}\n")
 
 
+def _tts_transform(text: str) -> str:
+    """Apply transformations to make story text more TTS-friendly.
+
+    Splits camel-case and PascalCase words with hyphens so that
+    text-to-speech engines read them as separate words while preserving
+    the original casing (e.g. getUserById → get-User-By-Id,
+    HTTPClient → HTTP-Client).
+    """
+    # Keep acronyms together: insert hyphen between a run of uppercase
+    # letters and the next uppercase+lowercase pair (HTTPClient → HTTP-Client).
+    text = re.sub(r'([A-Z]+)([A-Z][a-z])', r'\1-\2', text)
+    # Insert hyphen between a lowercase letter/digit and an uppercase letter
+    # (camelCase → camel-Case, get-User-By-Id).
+    text = re.sub(r'([a-z\d])([A-Z])', r'\1-\2', text)
+    return text
+
+
 def read_story(jsonl_path: str) -> str | None:
     """Return cached story text if story.txt exists next to events.jsonl, else None."""
     p = _story_path(jsonl_path)
     if os.path.exists(p):
         with open(p, encoding="utf-8") as fh:
-            return fh.read()
+            return _tts_transform(fh.read())
     return None
 
 
@@ -2206,7 +2223,7 @@ def generate_story(jsonl_path: str, force: bool = False, language: str = None) -
     cache = _story_path(jsonl_path)
     if os.path.exists(cache) and not force:
         with open(cache, encoding="utf-8") as fh:
-            return fh.read()
+            return _tts_transform(fh.read())
 
     # Some available models: gpt-4.1 (0x), gpt-5-mini (0x), gpt-5.4-mini (0.33x),
     # claude-haiku-4.5 (0x33x), claude-sonnet-4.5 (1x)
@@ -2263,7 +2280,7 @@ def generate_story(jsonl_path: str, force: bool = False, language: str = None) -
         with open(cache, "w", encoding="utf-8") as fh:
             fh.write(text)
         print("done")
-        return text
+        return _tts_transform(text)
     except FileNotFoundError:
         print("failed (copilot not found)")
         return None
