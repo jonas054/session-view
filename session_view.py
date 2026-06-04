@@ -1796,8 +1796,9 @@ def render_html(overview: dict, turns: list, events: list, source_path: str, a11
                 return f'<p class="md-h5">{escape(t)}</p>'
             if t == t.upper() and len(t) < 80 and any(c.isalpha() for c in t):
                 return f'<h2 class="md-h2">{escape(t)}</h2>'
-            if t.startswith("Chapter ") or t.startswith("Epilogue:"):
-                return f'<h3 class="md-h3">{escape(t)}</h3>'
+            if t.startswith("Chapter ") or t.startswith("Epilogue:") or t.startswith("**") or t.startswith("##"):
+                plain_t = t.replace("**", "").replace("##", "")
+                return f'<h3 class="md-h3">{escape(plain_t)}</h3>'
             return f'<p class="story-p">{escape(t)}</p>'
 
         paras = "\n".join(
