@@ -2249,7 +2249,7 @@ def generate_story(jsonl_path: str, force: bool = False, language: str = None) -
             return _tts_transform(fh.read())
 
     # Some available models: gpt-4.1 (0x), gpt-5-mini (0x), gpt-5.4-mini (0.33x),
-    # claude-haiku-4.5 (0x33x), claude-sonnet-4.5 (1x)
+    # claude-haiku-4.5 (0x33x), claude-sonnet-4.6 (1x)
     model = "claude-haiku-4.5"
     language = language or "English"
 
