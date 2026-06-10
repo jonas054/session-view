@@ -5,7 +5,7 @@ session_view - Render Copilot session events.jsonl file(s) as HTML,
 
 Usage:
     session_view                                      # batch: render all sessions, then regenerate overview
-    session_view <session-id or path-to-events.jsonl> # single file, no overview
+    session_view <session-id or path-to-events.jsonl> # single file; refresh overview for managed sessions
     session_view --story <path>                       # render with a Story tab (calls storyteller agent)
     session_view --story -f [-l <language>] <path>    # force-regenerate the story even if cached
 
@@ -68,6 +68,14 @@ def _session_summaries_path() -> Path:
 
 def _session_store_db_path() -> Path:
     return _copilot_dir() / "session-store.db"
+
+
+def _is_managed_session_events_path(path: str | Path) -> bool:
+    try:
+        resolved = Path(path).resolve()
+        return resolved.name == "events.jsonl" and _session_state_dir().resolve() in resolved.parents
+    except OSError:
+        return False
 
 
 def _current_username() -> str:
@@ -1969,8 +1977,9 @@ def read_session(session_dir: Path) -> dict:
     except OSError:
         pass
 
-    # Concatenate collected text for searching; keep reasonably sized
-    info["search_text"] = abbreviate(" ".join(parts), max_len=1000)
+    # Keep the full searchable conversation so overview filtering can match
+    # any user prompt or Copilot reply across the whole session.
+    info["search_text"] = " ".join(str(part) for part in parts if part)
 
     return info
 
@@ -2371,6 +2380,7 @@ def main():
     if args.input:
         # ── Single file mode ──────────────────────────────────────────
         input_path = _resolve_input_path(args.input)
+        managed_session_input = _is_managed_session_events_path(input_path)
         if not os.path.isfile(input_path):
             print(f"Error: file not found: {input_path}", file=sys.stderr)
             sys.exit(1)
@@ -2385,9 +2395,11 @@ def main():
             out_mtime = os.path.getmtime(output_path)
             if os.path.getmtime(input_path) <= out_mtime and effective_source_mtime <= out_mtime:
                 print(f"Up to date: {output_path}")
+                if managed_session_input:
+                    generate_overview()
                 return
         process_file(input_path, output_path, a11y=args.a11y, story=args.story, force=args.force, language=args.language)
-        if args.story:
+        if managed_session_input:
             generate_overview()
     else:
         # ── Batch mode: glob all session events ───────────────────────

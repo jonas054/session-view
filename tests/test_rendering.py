@@ -1,3 +1,5 @@
+import json
+
 import session_view as sv
 
 
@@ -54,6 +56,41 @@ def test_read_session_indexes_ask_user_questions_choices_and_answers(ask_user_se
     assert "Which view should I show?" in info["search_text"]
     assert "Show recent git commits" in info["search_text"]
     assert "Show file diffs (Recommended)" in info["search_text"]
+
+
+def test_read_session_keeps_full_prompt_and_response_search_text(write_session_fixture):
+    session_dir = write_session_fixture("rich-session.jsonl", session_id="search-full-text")
+    tail_prompt = "Tail prompt " + " ".join(["user"] * 180)
+    tail_response = "Tail response " + " ".join(["copilot"] * 180)
+
+    with (session_dir / "events.jsonl").open("a", encoding="utf-8") as f:
+        f.write(
+            json.dumps(
+                {
+                    "id": "ev-13",
+                    "timestamp": "2026-05-16T10:00:11Z",
+                    "type": "user.message",
+                    "data": {"content": tail_prompt, "interactionId": "int-2"},
+                }
+            )
+            + "\n"
+        )
+        f.write(
+            json.dumps(
+                {
+                    "id": "ev-14",
+                    "timestamp": "2026-05-16T10:00:12Z",
+                    "type": "assistant.message",
+                    "data": {"content": tail_response},
+                }
+            )
+            + "\n"
+        )
+
+    info = sv.read_session(session_dir)
+
+    assert tail_prompt in info["search_text"]
+    assert tail_response in info["search_text"]
 
 
 def test_process_file_renders_story_tab_a11y_and_query_hooks(rich_session_dir, tmp_path):

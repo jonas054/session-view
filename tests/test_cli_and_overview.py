@@ -73,6 +73,7 @@ def test_main_resolves_bare_session_id_and_writes_html(rich_session_dir, monkeyp
     assert "Render the session nicely" in html
     assert "Rendering session view" in html
     assert "The explore agent inspected the rendering path." in html
+    assert sv._overview_output_path().exists()
 
 
 @pytest.mark.parametrize(
