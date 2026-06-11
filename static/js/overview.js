@@ -173,10 +173,11 @@ function render() {
       frag.appendChild(tr);
 
       if (q && !promptMatched) {
-        let snippet = makeSnippet(item.search || '', q, 160) ||
-                      makeSnippet(item.prompt || '', q, 120) ||
-                      makeSnippet(item.cwd || '', q, 80) ||
-                      makeSnippet(item.model || '', q, 80) ||
+	const snippetSize = 80;
+        let snippet = makeSnippet(item.search || '', q, 2 * snippetSize) ||
+                      makeSnippet(item.prompt || '', q, 3 * snippetSize / 2) ||
+                      makeSnippet(item.cwd || '', q, snippetSize) ||
+                      makeSnippet(item.model || '', q, snippetSize) ||
                       '';
         if (snippet) {
           const sTr = document.createElement('tr');
