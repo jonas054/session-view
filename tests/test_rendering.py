@@ -85,8 +85,34 @@ def test_build_overview_excludes_empty_and_skill_context_user_messages():
         {"type": "user.message", "data": {"content": "Keep this one too"}},
     ]
 
-    overview = sv.build_overview(events)
-    html = sv.render_overview(overview)
+def test_build_overview_excludes_skill_context_user_messages():
+    overview = sv.build_overview(
+        [
+            {
+                "type": "session.start",
+                "timestamp": "2026-05-16T10:00:00Z",
+                "data": {
+                    "sessionId": "skill-session",
+                    "context": {},
+                },
+            },
+            {
+                "type": "user.message",
+                "timestamp": "2026-05-16T10:00:01Z",
+                "data": {"content": "Render the session nicely"},
+            },
+            {
+                "type": "user.message",
+                "timestamp": "2026-05-16T10:00:02Z",
+                "data": {"content": '<skill-context name="diagnose"> Base directory for this skill: /tmp/diagnose'},
+            },
+            {
+                "type": "session.shutdown",
+                "timestamp": "2026-05-16T10:00:03Z",
+                "data": {},
+            },
+        ]
+    )
 
     assert overview["user_messages"] == ["Keep this message", "Keep this one too"]
     assert html.count('class="user-msg-summary"') == 2
@@ -406,6 +432,25 @@ def test_render_turns_renders_ask_user_panel_and_selected_choice(read_jsonl_fixt
     assert 'class="ask-user-summary-answer"' in html
     assert ">Arguments<" not in html
     assert ">Result<" not in html
+
+
+def test_render_turns_formats_skill_context_as_skill_step():
+    html = sv.render_turns(
+        [
+            {
+                "user_message": {
+                    "content": '<skill-context name="diagnose"> Base directory for this skill: /tmp/diagnose',
+                    "timestamp": "2026-05-16T10:00:01Z",
+                    "event_id": "ev-skill",
+                },
+                "steps": [],
+            }
+        ]
+    )
+
+    assert "skill: diagnose" in html
+    assert "Base directory for this skill" in html
+    assert "👤 User" not in html
 
 
 def test_render_steps_shows_custom_ask_user_answer_without_guessing_choice():

@@ -232,6 +232,16 @@ def escape(text: str) -> str:
     return html.escape(str(text)) if text is not None else ""
 
 
+_SKILL_CONTEXT_RE = re.compile(r'\s*<skill-context\s+name=["\']?([^"\'>\s]+)["\']?', re.IGNORECASE)
+
+
+def skill_context_name(content: str | None) -> str | None:
+    if not content:
+        return None
+    match = _SKILL_CONTEXT_RE.match(content)
+    return match.group(1) if match else None
+
+
 ABBREV_LEN = 200
 
 
@@ -1429,12 +1439,8 @@ def render_turns(turns: list) -> str:
             ev_id = um.get("event_id", "")
             raw_link = _raw_event_link(ev_id)
             content = um["content"]
-            if not content.strip():
-                pass  # empty message — hide from view
-            elif re.match(r'\s*<system_reminder\b', content, re.IGNORECASE):
-                pass  # system-injected reminder — hide from view
-            elif skill_match := re.match(r'\s*<skill-context\s+name=["\']?([^"\'>\s]+)["\']?', content, re.IGNORECASE):
-                skill_name = skill_match.group(1)
+            skill_name = skill_context_name(content)
+            if skill_name:
                 turn_html += f"""
             <details class="tool-step skill-context-step" id="turn-{i}-skill">
               <summary class="tool-summary" style="background:#fffbeb;border-left:3px solid #f59e0b">
