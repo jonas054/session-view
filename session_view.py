@@ -1605,8 +1605,9 @@ def render_turns(turns: list) -> str:
             ev_id = um.get("event_id", "")
             raw_link = _raw_event_link(ev_id)
             content = um["content"]
-            skill_match = re.match(r'\s*<skill-context\s+name=["\']?([^"\'>\s]+)["\']?', content, re.IGNORECASE)
-            if skill_match:
+            if re.match(r'\s*<system_reminder\b', content, re.IGNORECASE):
+                pass  # system-injected reminder — hide from view
+            elif skill_match := re.match(r'\s*<skill-context\s+name=["\']?([^"\'>\s]+)["\']?', content, re.IGNORECASE):
                 skill_name = skill_match.group(1)
                 turn_html += f"""
             <details class="tool-step skill-context-step" id="turn-{i}-skill">

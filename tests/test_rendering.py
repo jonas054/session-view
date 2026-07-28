@@ -37,6 +37,27 @@ def test_build_turns_treats_commentary_phase_as_reasoning():
     assert turns[0]["steps"][1]["content"] == "Done!"
 
 
+def test_render_turns_hides_system_reminder_user_messages():
+    events = [
+        {"id": "ev-1", "timestamp": "2026-01-01T10:00:00Z", "type": "user.message",
+         "data": {"content": "Hello", "interactionId": "int-1"}},
+        {"id": "ev-2", "timestamp": "2026-01-01T10:00:01Z", "type": "assistant.message",
+         "data": {"content": "Hi there!", "toolRequests": [], "model": "claude-sonnet-4.6"}},
+        {"id": "ev-3", "timestamp": "2026-01-01T10:00:02Z", "type": "user.message",
+         "data": {"content": "<system_reminder>\n<sql_tables>Available tables: todos</sql_tables>\n</system_reminder>",
+                  "interactionId": "int-2"}},
+        {"id": "ev-4", "timestamp": "2026-01-01T10:00:03Z", "type": "assistant.message",
+         "data": {"content": "Follow-up reply.", "toolRequests": [], "model": "claude-sonnet-4.6"}},
+    ]
+    turns = sv.build_turns(events)
+    html = sv.render_turns(turns)
+
+    assert "Hello" in html
+    assert "system_reminder" not in html
+    assert "sql_tables" not in html
+    assert "Follow-up reply" in html
+
+
 def test_build_turns_reconstructs_reasoning_intent_tool_and_subagent_steps(rich_events):
     turns = sv.build_turns(rich_events)
 
