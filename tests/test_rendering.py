@@ -37,6 +37,25 @@ def test_build_turns_treats_commentary_phase_as_reasoning():
     assert turns[0]["steps"][1]["content"] == "Done!"
 
 
+def test_render_turns_hides_empty_user_messages():
+    events = [
+        {"id": "ev-1", "timestamp": "2026-01-01T10:00:00Z", "type": "user.message",
+         "data": {"content": "Hello", "interactionId": "int-1"}},
+        {"id": "ev-2", "timestamp": "2026-01-01T10:00:01Z", "type": "assistant.message",
+         "data": {"content": "Hi there!", "toolRequests": [], "model": "claude-sonnet-4.6"}},
+        {"id": "ev-3", "timestamp": "2026-01-01T10:00:02Z", "type": "user.message",
+         "data": {"content": "", "interactionId": "int-2"}},
+        {"id": "ev-4", "timestamp": "2026-01-01T10:00:03Z", "type": "assistant.message",
+         "data": {"content": "Still here.", "toolRequests": [], "model": "claude-sonnet-4.6"}},
+    ]
+    turns = sv.build_turns(events)
+    html = sv.render_turns(turns)
+
+    assert "Hello" in html
+    assert html.count("user-bubble") == 1
+    assert "Still here" in html
+
+
 def test_render_turns_hides_system_reminder_user_messages():
     events = [
         {"id": "ev-1", "timestamp": "2026-01-01T10:00:00Z", "type": "user.message",
