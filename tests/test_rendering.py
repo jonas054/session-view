@@ -16,6 +16,27 @@ def test_build_overview_tracks_metrics_and_excludes_report_intent_from_tools_use
     assert overview["total_premium_requests"] == 2
 
 
+def test_build_turns_treats_commentary_phase_as_reasoning():
+    events = [
+        {"id": "ev-1", "timestamp": "2026-01-01T10:00:00Z", "type": "user.message",
+         "data": {"content": "Do something", "interactionId": "int-1"}},
+        {"id": "ev-2", "timestamp": "2026-01-01T10:00:01Z", "type": "assistant.message",
+         "data": {"phase": "commentary", "content": "I'll read the file first.", "toolRequests": [],
+                  "encryptedContent": "abc123", "model": "gpt-5.4"}},
+        {"id": "ev-3", "timestamp": "2026-01-01T10:00:02Z", "type": "assistant.message",
+         "data": {"phase": "final_answer", "content": "Done!", "toolRequests": [],
+                  "encryptedContent": "def456", "model": "gpt-5.4"}},
+    ]
+
+    turns = sv.build_turns(events)
+
+    assert len(turns) == 1
+    kinds = [step["kind"] for step in turns[0]["steps"]]
+    assert kinds == ["reasoning", "text"]
+    assert turns[0]["steps"][0]["content"] == "I'll read the file first."
+    assert turns[0]["steps"][1]["content"] == "Done!"
+
+
 def test_build_turns_reconstructs_reasoning_intent_tool_and_subagent_steps(rich_events):
     turns = sv.build_turns(rich_events)
 

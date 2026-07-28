@@ -539,11 +539,16 @@ def build_turns(events: list) -> list:
                 flush_text()
                 current_steps.append({"kind": "reasoning", "content": reasoning, "event_id": ev.get("id", "")})
 
+            phase = d.get("phase")
             text = d.get("content", "").strip()
             if text:
-                if current_text_event_id is None:
-                    current_text_event_id = ev.get("id", "")
-                current_text_parts.append(text)
+                if phase == "commentary":
+                    flush_text()
+                    current_steps.append({"kind": "reasoning", "content": text, "event_id": ev.get("id", "")})
+                else:
+                    if current_text_event_id is None:
+                        current_text_event_id = ev.get("id", "")
+                    current_text_parts.append(text)
 
             # Tool requests embedded in the message
             for tr in d.get("toolRequests", []):
@@ -2196,11 +2201,12 @@ def _parse_json_events(jsonl_path: str) -> None:
                 content = data.get('content', '')
                 tool_requests = data.get('toolRequests', [])
                 tools = [tr.get('name') for tr in tool_requests]
-                reasoning_text = data.get('reasoningText', {})
+                reasoning_text = data.get('reasoningText', '') or (content if data.get('phase') == 'commentary' else '')
+                display_content = '' if data.get('phase') == 'commentary' else content
                 f.write(f"Event {i}: ASSISTANT MESSAGE - "
                         f"<tools>{tools}</tools>"
                         f"<reasoning>{reasoning_text}</reasoning>"
-                        f"<content>{content}</content>\n")
+                        f"<content>{display_content}</content>\n")
             elif event_type == 'assistant.turn_end' or event_type == 'assistant.turn_start':
                 continue
             elif event_type == 'tool.execution_complete':
