@@ -1347,7 +1347,10 @@ def _md_list_items(lines: list, ordered: bool) -> str:
         elif line.startswith("  ") or line.startswith("\t"):
             stripped = line[2:] if line.startswith("  ") else line[1:]
             if current:
-                sub.append(stripped)
+                if item_re.match(stripped) or sub:
+                    sub.append(stripped)
+                else:
+                    current.append(stripped)
         else:
             if current:
                 current.append(line.strip())

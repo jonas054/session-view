@@ -281,3 +281,23 @@ def test_markdown_to_html_renders_lists_tables_and_inline_markup():
     assert '<code class="md-code">code</code>' in html
     assert '<ol class="md-ol">' in html
     assert "<table" in html
+
+
+def test_markdown_to_html_preserves_indented_list_continuations():
+    html = sv.markdown_to_html(
+        "- [ ] 🔴 **Cross-customer message risk** — `secure-message.ts:88-100`  \n"
+        "  The dialog is non-modal and retains the original `partId`/`conversationId`.\n\n"
+        "- 🟡 **Template variables are not substituted** — `follow-up-message.ts:76-80`  \n"
+        "  `MarkdownTemplate.body` is used verbatim, so `{{firstName}}` can be sent literally.\n"
+    )
+
+    assert "The dialog is non-modal and retains the original" in html
+    assert "MarkdownTemplate.body" in html
+    assert '<ul class="md-ul"></ul>' not in html
+
+
+def test_markdown_to_html_keeps_nested_lists():
+    html = sv.markdown_to_html("- parent\n  - child\n")
+
+    assert '<ul class="md-ul"><li class=\'md-li\'>parent<ul class="md-ul">' in html
+    assert "child" in html
