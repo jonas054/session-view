@@ -2269,7 +2269,8 @@ def generate_story(jsonl_path: str, force: bool = False, language: str = None) -
 
     # Some available models: gpt-4.1 (0x), gpt-5-mini (0x), gpt-5.4-mini (0.33x),
     # claude-haiku-4.5 (0x33x), claude-sonnet-4.6 (1x)
-    model = "claude-haiku-4.5"
+    model = "gpt-5.6-luna"
+    effort = "max"
     language = language or "English"
 
     _parse_json_events(jsonl_path)  # ensure events.txt is up to date
@@ -2294,7 +2295,7 @@ def generate_story(jsonl_path: str, force: bool = False, language: str = None) -
         f"{events_txt}"
         "\n\n</session_events>\n"
     )
-    cmd = ["copilot", "--yolo", f"--model={model}", "--prompt", prompt]
+    cmd = ["copilot", "--yolo", f"--model={model}", "--effort", effort, "--prompt", prompt]
     print(f"  ✦ Generating story…", end=" ", flush=True)
     try:
         result = _run_story_command(cmd)
