@@ -16,6 +16,26 @@ def test_build_overview_tracks_metrics_and_excludes_report_intent_from_tools_use
     assert overview["total_premium_requests"] == 2
 
 
+def test_build_overview_excludes_empty_and_skill_context_user_messages():
+    events = [
+        {"type": "user.message", "data": {"content": "Keep this message"}},
+        {"type": "user.message", "data": {"content": ""}},
+        {"type": "user.message", "data": {"content": " \n\t "}},
+        {
+            "type": "user.message",
+            "data": {"content": '\n<skill-context name="example">\ninternal context\n</skill-context>'},
+        },
+        {"type": "user.message", "data": {"content": "Keep this one too"}},
+    ]
+
+    overview = sv.build_overview(events)
+    html = sv.render_overview(overview)
+
+    assert overview["user_messages"] == ["Keep this message", "Keep this one too"]
+    assert html.count('class="user-msg-summary"') == 2
+    assert "skill-context" not in html
+
+
 def test_build_turns_treats_commentary_phase_as_reasoning():
     events = [
         {"id": "ev-1", "timestamp": "2026-01-01T10:00:00Z", "type": "user.message",

@@ -410,7 +410,13 @@ def build_overview(events: list) -> dict:
             overview["head_commit"] = ctx.get("headCommit")
 
         elif t == "user.message":
-            overview["user_messages"].append(d.get("content", ""))
+            content = d.get("content", "")
+            if (
+                isinstance(content, str)
+                and content.strip()
+                and not re.match(r"\s*<skill-context\b", content, re.IGNORECASE)
+            ):
+                overview["user_messages"].append(content)
 
         elif t == "session.shutdown":
             overview["end_time"] = ev.get("timestamp")
