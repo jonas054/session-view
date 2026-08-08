@@ -97,6 +97,19 @@ function loadSearchFromUrl() {
   return url.searchParams.get('q') || '';
 }
 
+function matchesQuery(item, q) {
+  return !q ||
+    item.ts.includes(q) ||
+    [item.cwd, item.cwd_display, item.model, item.summary, item.prompt, item.search]
+      .some(value => (value || '').toLowerCase().includes(q));
+}
+
+function makeDirectorySnippet(item, q, maxLen) {
+  return makeSnippet(item.cwd || '', q, maxLen) ||
+         makeSnippet(item.cwd_display || '', q, maxLen) ||
+         '';
+}
+
 function toggleGroup(gk) {
   if (collapsed.has(gk)) collapsed.delete(gk); else collapsed.add(gk);
   render();
@@ -104,15 +117,7 @@ function toggleGroup(gk) {
 
 function render() {
   const q = query.toLowerCase();
-  const filtered = DATA.filter(item =>
-    !q ||
-    item.ts.includes(q) ||
-    (item.cwd     || '').toLowerCase().includes(q) ||
-    (item.model   || '').toLowerCase().includes(q) ||
-    (item.summary || '').toLowerCase().includes(q) ||
-    (item.prompt  || '').toLowerCase().includes(q) ||
-    (item.search  || '').toLowerCase().includes(q)
-  );
+  const filtered = DATA.filter(item => matchesQuery(item, q));
 
   filtered.sort((a, b) => {
     const av = getSortVal(a, sortCol), bv = getSortVal(b, sortCol);
@@ -176,7 +181,7 @@ function render() {
 	const snippetSize = 80;
         let snippet = makeSnippet(item.search || '', q, 2 * snippetSize) ||
                       makeSnippet(item.prompt || '', q, 3 * snippetSize / 2) ||
-                      makeSnippet(item.cwd || '', q, snippetSize) ||
+                      makeDirectorySnippet(item, q, snippetSize) ||
                       makeSnippet(item.model || '', q, snippetSize) ||
                       '';
         if (snippet) {
@@ -233,15 +238,7 @@ document.getElementById('btn-expand').addEventListener('click', () => {
 
 document.getElementById('btn-collapse').addEventListener('click', () => {
   const q = query.toLowerCase();
-  DATA.filter(item =>
-    !q ||
-    item.ts.includes(q) ||
-    (item.cwd     || '').toLowerCase().includes(q) ||
-    (item.model   || '').toLowerCase().includes(q) ||
-    (item.summary || '').toLowerCase().includes(q) ||
-    (item.prompt  || '').toLowerCase().includes(q) ||
-    (item.search  || '').toLowerCase().includes(q)
-  ).forEach(item => {
+  DATA.filter(item => matchesQuery(item, q)).forEach(item => {
     const gk = getGroupKey(item, sortCol);
     if (gk !== null) collapsed.add(gk);
   });

@@ -64,6 +64,36 @@ def test_build_overview_html_embeds_search_payload_and_filters_internal_story_se
     assert "url.searchParams.set('q', value);" in html
 
 
+def test_build_overview_html_matches_full_and_displayed_directories_like_models():
+    html = sv.build_overview_html(
+        [
+            {
+                "id": "directory-session",
+                "events_html": "/tmp/directory/events.html",
+                "start_time": "2026-05-16T10:00:00Z",
+                "cwd": "/tmp/example/project",
+                "first_prompt": "Find the directory session",
+                "search_text": "",
+                "model": "gpt-5.4",
+                "user_prompt_count": 1,
+                "intent_count": 0,
+                "has_story": False,
+                "total_premium_requests": 0,
+                "model_metrics": {},
+                "summary": "",
+            },
+        ]
+    )
+
+    assert '"cwd": "/tmp/example/project"' in html
+    assert '"cwd_display": "example/project"' in html
+    assert "function matchesQuery(item, q)" in html
+    assert "item.cwd_display" in html
+    assert "item.model" in html
+    assert "makeDirectorySnippet(item, q, snippetSize)" in html
+    assert html.count("matchesQuery(item, q)") >= 2
+
+
 def test_main_resolves_bare_session_id_and_writes_html(rich_session_dir, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["session_view.py", "rich-session"])
 
