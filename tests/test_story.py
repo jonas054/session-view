@@ -42,8 +42,8 @@ def test_generate_story_writes_cache_from_subprocess_output(rich_session_dir, mo
     assert (rich_session_dir / "story.txt").read_text(encoding="utf-8") == story
     assert (rich_session_dir / "events.txt").exists()
     assert "text in the Swedish language" in prompt
-    assert "plain text in your response" not in prompt
-    assert "markdown in your response" in prompt
+    assert "plain text in your response" in prompt
+    assert "markdown in your response" not in prompt
     assert "do not write it to any file and do not use any tools" in prompt
 
 
