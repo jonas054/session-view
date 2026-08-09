@@ -2,7 +2,22 @@ const DATA = __DATA__;
 let sortCol = 0;   // 0=ts, 1=cwd, 2=model, 3=activity, 4=premium, 5=story, 6=summary, 7=prompt
 let sortAsc = false;
 let query = '';
+let selectedFields = new Set(SEARCH_FIELDS);
 const collapsed = new Set();
+const snippetPriority = [
+  "prompts",
+  "replies",
+  "reasoning",
+  "intents",
+  "tools",
+  "story",
+  "directory",
+  "model",
+  "summary",
+];
+const scopedSearchAvailable = DATA.every(
+  item => item.search_fields && typeof item.search_fields === "object"
+);
 
 function getGroupKey(item, col) {
   if (col === 0) return item.ts.slice(0, 10);       // YYYY-MM-DD
@@ -12,7 +27,7 @@ function getGroupKey(item, col) {
   if (col === 4) return String(item.premium_requests || 0);
   if (col === 5) return item.has_story ? 'yes' : 'no';
   if (col === 6) return item.summary || '-';
-  const words = (item.prompt || '').trim().split(/\\s+/);
+  const words = (item.prompt || '').trim().split(/\s+/);
   return words.slice(0, 6).join(' ') + (words.length > 6 ? '…' : '') || '(empty)';
 }
 
@@ -38,7 +53,7 @@ function makeSnippet(text, q, maxLen = 140) {
   if (!q || !text) return '';
   const t = String(text);
   const tl = t.toLowerCase();
-  const tokens = q.trim().split(/\\s+/).filter(Boolean);
+  const tokens = q.trim().split(/\s+/).filter(Boolean);
   if (!tokens.length) return '';
   let firstIdx = -1;
   for (const tok of tokens) {
@@ -64,7 +79,7 @@ function makeSnippet(text, q, maxLen = 140) {
 function highlightText(text, q) {
   if (!q || !text) return escHtml(text);
   const t = String(text);
-  const tokens = q.trim().split(/\\s+/).filter(Boolean);
+  const tokens = q.trim().split(/\s+/).filter(Boolean);
   if (!tokens.length) return escHtml(text);
   const re = new RegExp('(' + tokens.map(escapeRegExp).join('|') + ')', 'gi');
   const parts = t.split(re);
@@ -78,9 +93,22 @@ function makeRowClickable(tr, href) {
   });
 }
 
+function allFieldsSelected() {
+  return selectedFields.size === SEARCH_FIELDS.length;
+}
+
+function syncMatchParam(url) {
+  if (allFieldsSelected()) {
+    url.searchParams.delete('match');
+  } else {
+    url.searchParams.set('match', SEARCH_FIELDS.filter(field => selectedFields.has(field)).join(','));
+  }
+}
+
 function buildSessionHref(path, hash) {
   const url = new URL(`file://${path}`);
   if (query) url.searchParams.set('q', query);
+  syncMatchParam(url);
   if (hash) url.hash = hash;
   return url.toString();
 }
@@ -89,25 +117,89 @@ function syncSearchUrl(value) {
   const url = new URL(window.location.href);
   if (value) url.searchParams.set('q', value);
   else url.searchParams.delete('q');
+  syncMatchParam(url);
   history.replaceState(null, '', url);
 }
 
-function loadSearchFromUrl() {
+function loadSearchStateFromUrl() {
   const url = new URL(window.location.href);
-  return url.searchParams.get('q') || '';
+  query = url.searchParams.get('q') || '';
+  const fields = parseSearchFields(url);
+  selectedFields = fields === null ? new Set(SEARCH_FIELDS) : fields;
+}
+
+function fieldMatches(item, field, q) {
+  return selectedFields.has(field) && searchFieldMatches(item, field, q);
 }
 
 function matchesQuery(item, q) {
-  return !q ||
-    item.ts.includes(q) ||
-    [item.cwd, item.cwd_display, item.model, item.summary, item.prompt, item.search]
-      .some(value => (value || '').toLowerCase().includes(q));
+  if (!q) return true;
+  if (!scopedSearchAvailable || !selectedFields.size) return false;
+  return SEARCH_FIELDS.some(field => fieldMatches(item, field, q));
 }
 
 function makeDirectorySnippet(item, q, maxLen) {
-  return makeSnippet(item.cwd || '', q, maxLen) ||
-         makeSnippet(item.cwd_display || '', q, maxLen) ||
-         '';
+  return makeSnippet(searchFieldText(item, 'directory'), q, maxLen) || '';
+}
+
+function primaryMatchField(item, q) {
+  if (!q || !scopedSearchAvailable || !selectedFields.size) return '';
+  return snippetPriority.find(field => fieldMatches(item, field, q)) || '';
+}
+
+function makePrimarySnippet(item, q, promptMatched, snippetSize) {
+  const field = primaryMatchField(item, q);
+  if (!field || (field === 'prompts' && promptMatched)) return null;
+
+  const text = searchFieldText(item, field);
+  const snippet = field === 'directory'
+    ? makeDirectorySnippet(item, q, snippetSize)
+    : makeSnippet(text, q, field === 'story' ? 2 * snippetSize : 2 * snippetSize);
+  if (!snippet) return null;
+  return {
+    field,
+    html: `<span class="snippet-label">${escHtml(SEARCH_FIELD_LABELS[field])}:</span> ${snippet}`,
+  };
+}
+
+function sessionHashFor(item, q) {
+  const field = primaryMatchField(item, q);
+  if (field === 'story') return 'story';
+  if (["prompts", "replies", "reasoning", "intents", "tools"].includes(field)) return 'turns';
+  if (field) return 'overview';
+  return 'turns';
+}
+
+function updateSearchControls() {
+  const fieldset = document.getElementById('search-fields');
+  const disabled = !scopedSearchAvailable;
+  if (fieldset) fieldset.classList.toggle('search-fields-unavailable', disabled);
+
+  document.querySelectorAll('#search-fields input[data-search-field]').forEach(input => {
+    input.checked = selectedFields.has(input.dataset.searchField);
+    input.disabled = disabled;
+  });
+  document.querySelectorAll('#search-fields button').forEach(button => {
+    button.disabled = disabled;
+  });
+}
+
+function updateSearchStatus(count) {
+  const status = document.getElementById('search-status');
+  if (!status) return;
+  const activeQuery = normalizeSearchText(query);
+  if (!scopedSearchAvailable) {
+    status.className = 'search-status search-status-error';
+    status.textContent = 'Scoped search data is unavailable. Regenerate sessions-overview.html with session_view.';
+  } else if (activeQuery && !selectedFields.size) {
+    status.className = 'search-status search-status-warning';
+    status.textContent = 'Select at least one field to search.';
+  } else {
+    status.className = 'search-status';
+    status.textContent = activeQuery
+      ? `${count} matching session${count === 1 ? '' : 's'}`
+      : `${count} session${count === 1 ? '' : 's'}`;
+  }
 }
 
 function toggleGroup(gk) {
@@ -116,7 +208,7 @@ function toggleGroup(gk) {
 }
 
 function render() {
-  const q = query.toLowerCase();
+  const q = normalizeSearchText(query);
   const filtered = DATA.filter(item => matchesQuery(item, q));
 
   filtered.sort((a, b) => {
@@ -161,10 +253,17 @@ function render() {
       tr.className = 'data-row';
       if (gk !== null) tr.dataset.group = gk;
       const promptText = item.prompt || '';
-      const promptMatched = q && promptText.toLowerCase().includes(q);
-      const sessionHref = buildSessionHref(item.link, 'turns');
+      const normalizedQuery = normalizeSearchText(q);
+      const promptMatched = Boolean(
+        q &&
+        selectedFields.has('prompts') &&
+        normalizeSearchText(promptText).includes(normalizedQuery)
+      );
+      const sessionHref = buildSessionHref(item.link, sessionHashFor(item, q));
       const storyHref = buildSessionHref(item.link, 'story');
-      const promptHtml = promptText ? (promptMatched ? highlightText(promptText, q) : escHtml(promptText)) : '<em>\u2014</em>';
+      const promptHtml = promptText
+        ? (promptMatched ? highlightText(promptText, q) : escHtml(promptText))
+        : '<em>—</em>';
       tr.innerHTML =
         `<td class="ts">${escHtml(item.ts)}</td>` +
         `<td class="cwd" title="${escHtml(item.cwd)}">${escHtml(item.cwd_display)}</td>` +
@@ -178,16 +277,11 @@ function render() {
       frag.appendChild(tr);
 
       if (q && !promptMatched) {
-	const snippetSize = 80;
-        let snippet = makeSnippet(item.search || '', q, 2 * snippetSize) ||
-                      makeSnippet(item.prompt || '', q, 3 * snippetSize / 2) ||
-                      makeDirectorySnippet(item, q, snippetSize) ||
-                      makeSnippet(item.model || '', q, snippetSize) ||
-                      '';
+        const snippet = makePrimarySnippet(item, q, promptMatched, 80);
         if (snippet) {
           const sTr = document.createElement('tr');
           sTr.className = 'snippet-row';
-          sTr.innerHTML = `<td colspan="8">${snippet}</td>`;
+          sTr.innerHTML = `<td colspan="8">${snippet.html}</td>`;
           makeRowClickable(sTr, sessionHref);
           frag.appendChild(sTr);
         }
@@ -196,6 +290,8 @@ function render() {
   });
 
   document.querySelector('#sessions-table tbody').replaceChildren(frag);
+  updateSearchControls();
+  updateSearchStatus(filtered.length);
 
   const modelUsage = document.getElementById('model-usage');
   if (modelUsage) {
@@ -225,8 +321,29 @@ document.getElementById('search').addEventListener('input', e => {
   render();
 });
 
+document.querySelectorAll('#search-fields input[data-search-field]').forEach(input => {
+  input.addEventListener('change', () => {
+    if (input.checked) selectedFields.add(input.dataset.searchField);
+    else selectedFields.delete(input.dataset.searchField);
+    syncSearchUrl(query);
+    render();
+  });
+});
+
+document.getElementById('btn-select-all').addEventListener('click', () => {
+  selectedFields = new Set(SEARCH_FIELDS);
+  syncSearchUrl(query);
+  render();
+});
+
+document.getElementById('btn-select-none').addEventListener('click', () => {
+  selectedFields.clear();
+  syncSearchUrl(query);
+  render();
+});
+
 window.addEventListener('popstate', () => {
-  query = loadSearchFromUrl();
+  loadSearchStateFromUrl();
   document.getElementById('search').value = query;
   render();
 });
@@ -237,7 +354,7 @@ document.getElementById('btn-expand').addEventListener('click', () => {
 });
 
 document.getElementById('btn-collapse').addEventListener('click', () => {
-  const q = query.toLowerCase();
+  const q = normalizeSearchText(query);
   DATA.filter(item => matchesQuery(item, q)).forEach(item => {
     const gk = getGroupKey(item, sortCol);
     if (gk !== null) collapsed.add(gk);
@@ -245,6 +362,6 @@ document.getElementById('btn-collapse').addEventListener('click', () => {
   render();
 });
 
-query = loadSearchFromUrl();
+loadSearchStateFromUrl();
 document.getElementById('search').value = query;
 render();

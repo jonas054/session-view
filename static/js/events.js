@@ -37,9 +37,46 @@ function getSearchQuery() {
   return new URL(window.location.href).searchParams.get('q') || '';
 }
 
-function highlightSearchInNode(root, query) {
-  const tokens = query.trim().split(/\\s+/).filter(Boolean);
-  if (!tokens.length || !root) return 0;
+function getSearchFields() {
+  return parseSearchFields(new URL(window.location.href));
+}
+
+function updateBackLink(query) {
+  const backLink = document.querySelector('.back-link');
+  if (!backLink) return;
+  const url = new URL(backLink.href);
+  if (query) url.searchParams.set('q', query);
+  else url.searchParams.delete('q');
+
+  const fields = getSearchFields();
+  if (fields === null || fields.size === SEARCH_FIELDS.length) {
+    url.searchParams.delete('match');
+  } else {
+    url.searchParams.set('match', searchFieldsParam(fields));
+  }
+  backLink.href = url.toString();
+}
+
+function closestSearchField(node) {
+  let element = node.parentElement;
+  while (element) {
+    if (element.dataset && element.dataset.searchField) {
+      return element.dataset.searchField;
+    }
+    element = element.parentElement;
+  }
+  return '';
+}
+
+function canHighlightNode(node, fields) {
+  if (fields === null || fields.size === SEARCH_FIELDS.length) return true;
+  const field = closestSearchField(node);
+  return field ? fields.has(field) : false;
+}
+
+function highlightSearchInNode(root, query, fields) {
+  const tokens = query.trim().split(/\s+/).filter(Boolean);
+  if (!tokens.length || !root || (fields && !fields.size)) return 0;
 
   const re = new RegExp('(' + tokens.map(escapeRegExp).join('|') + ')', 'gi');
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
@@ -49,6 +86,7 @@ function highlightSearchInNode(root, query) {
       if (!parent) return NodeFilter.FILTER_REJECT;
       if (parent.closest('mark.search-hit')) return NodeFilter.FILTER_REJECT;
       if (['SCRIPT', 'STYLE', 'MARK'].includes(parent.tagName)) return NodeFilter.FILTER_REJECT;
+      if (!canHighlightNode(node, fields)) return NodeFilter.FILTER_REJECT;
       re.lastIndex = 0;
       return re.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
     }
@@ -94,22 +132,30 @@ function highlightSearchInNode(root, query) {
 
 function applySearchQueryToTurns() {
   const query = getSearchQuery();
+  updateBackLink(query);
   if (!query) return;
 
-  const backLink = document.querySelector('.back-link');
-  if (backLink) {
-    const url = new URL(backLink.href);
-    url.searchParams.set('q', query);
-    backLink.href = url.toString();
-  }
+  const fields = getSearchFields();
+  if (fields && !fields.size) return;
 
+  const overviewPanel = document.getElementById('panel-overview');
   const turnsPanel = document.getElementById('panel-turns');
-  if (!turnsPanel) return;
+  const storyPanel = document.getElementById('panel-story');
+  const overviewHits = highlightSearchInNode(overviewPanel, query, fields);
+  const turnHits = highlightSearchInNode(turnsPanel, query, fields);
+  const storyHits = highlightSearchInNode(storyPanel, query, fields);
 
-  const hits = highlightSearchInNode(turnsPanel, query);
-  if (hits > 0) {
+  if (storyHits > 0 && turnHits === 0) {
+    showTab('story', false);
+    const firstHit = storyPanel.querySelector('mark.search-hit');
+    if (firstHit) firstHit.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else if (turnHits > 0) {
     showTab('turns', false);
     const firstHit = turnsPanel.querySelector('mark.search-hit');
+    if (firstHit) firstHit.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else if (overviewHits > 0) {
+    showTab('overview', false);
+    const firstHit = overviewPanel.querySelector('mark.search-hit');
     if (firstHit) firstHit.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 }

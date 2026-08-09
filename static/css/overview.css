@@ -23,6 +23,64 @@
   white-space: nowrap;
 }
 .btn:hover { background: #e2e8f0; }
+.btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.search-fields {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: -8px 0 8px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #475569;
+}
+.search-fields legend {
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.search-field-options {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.search-field-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.search-field-option input {
+  accent-color: #6366f1;
+}
+.search-field-option:focus-within {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.search-field-actions {
+  display: flex;
+  gap: 6px;
+}
+.search-status {
+  min-height: 18px;
+  margin: 0 0 8px;
+  color: #64748b;
+  font-size: 12px;
+}
+.search-status-warning { color: #a16207; }
+.search-status-error { color: #b91c1c; }
+.search-fields-unavailable {
+  border-color: #fca5a5;
+  background: #fff7f7;
+}
 .sessions-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .sessions-table th {
   text-align: left;

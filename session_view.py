@@ -106,6 +106,30 @@ def _effective_source_mtime() -> float:
     return max(os.path.getmtime(__file__), _static_assets_mtime())
 
 
+def _story_mtime(jsonl_path: str | Path) -> float:
+    story_path = Path(jsonl_path).with_name("story.txt")
+    try:
+        return story_path.stat().st_mtime if story_path.exists() else 0.0
+    except OSError:
+        return 0.0
+
+
+def _overview_needs_refresh() -> bool:
+    overview_path = _overview_output_path()
+    try:
+        overview_mtime = overview_path.stat().st_mtime
+    except OSError:
+        return False
+
+    source_mtime = _effective_source_mtime()
+    for story_path in _glob.glob(str(_session_state_dir() / "*" / "story.txt")):
+        try:
+            source_mtime = max(source_mtime, Path(story_path).stat().st_mtime)
+        except OSError:
+            continue
+    return source_mtime > overview_mtime
+
+
 def _resolve_input_path(input_arg: str) -> str:
     input_path = os.path.expanduser(input_arg)
     if not os.path.exists(input_path):
@@ -381,6 +405,7 @@ def build_overview(events: list) -> dict:
         "cwd": None,
         "branch": None,
         "head_commit": None,
+        "model": None,
         "shutdown_type": None,
         "total_premium_requests": 0,
         "total_api_duration_ms": None,
@@ -408,14 +433,11 @@ def build_overview(events: list) -> dict:
             overview["cwd"] = ctx.get("cwd")
             overview["branch"] = ctx.get("branch")
             overview["head_commit"] = ctx.get("headCommit")
+            overview["model"] = d.get("selectedModel")
 
         elif t == "user.message":
             content = d.get("content", "")
-            if (
-                isinstance(content, str)
-                and content.strip()
-                and not re.match(r"\s*<skill-context\b", content, re.IGNORECASE)
-            ):
+            if _searchable_user_message(content):
                 overview["user_messages"].append(content)
 
         elif t == "session.shutdown":
@@ -443,6 +465,8 @@ def build_overview(events: list) -> dict:
                 "name": d.get("agentDisplayName", d.get("agentName", "")),
                 "ts": ev.get("timestamp"),
             })
+        elif not overview["model"] and d.get("model"):
+            overview["model"] = d["model"]
 
     # Calculate duration
     if overview["start_time"] and overview["end_time"]:
@@ -887,7 +911,7 @@ def _render_ask_user_interaction(args, result) -> str:
     if state["question"]:
         parts.append(
             '<div class="ask-user-question-label">Question</div>'
-            f'<div class="ask-user-question">{_md_inline(state["question"])}</div>'
+            f'<div class="ask-user-question" data-search-field="prompts">{_md_inline(state["question"])}</div>'
         )
 
     if state["choices"]:
@@ -898,7 +922,7 @@ def _render_ask_user_interaction(args, result) -> str:
             badge = '<span class="ask-user-choice-badge">✓ Selected</span>' if selected else ""
             items.append(
                 f'<li class="{choice_class}">'
-                f'<span class="ask-user-choice-label">{_md_inline(choice)}</span>'
+                f'<span class="ask-user-choice-label" data-search-field="prompts">{_md_inline(choice)}</span>'
                 f"{badge}"
                 "</li>"
             )
@@ -915,7 +939,7 @@ def _render_ask_user_interaction(args, result) -> str:
         parts.append(
             '<div class="ask-user-answer-label">Answer</div>'
             '<div class="ask-user-answer">'
-            f'<div class="ask-user-answer-text">{_md_inline(state["custom_answer"])}</div>'
+            f'<div class="ask-user-answer-text" data-search-field="prompts">{_md_inline(state["custom_answer"])}</div>'
             f"{note}"
             "</div>"
         )
@@ -1500,7 +1524,7 @@ def render_overview(ov: dict) -> str:
     # Tools used
     tools_sorted = sorted(ov["tools_used"].items(), key=lambda x: -x[1])
     tools_html = "".join(
-        f'<span class="tool-badge" style="border-color:{tool_border(n)};background:{tool_bg(n)}">'
+        f'<span class="tool-badge" data-search-field="tools" style="border-color:{tool_border(n)};background:{tool_bg(n)}">'
         f'{tool_icon(n)} {escape(n)} <strong>{c}</strong></span>'
         for n, c in tools_sorted
     )
@@ -1508,14 +1532,17 @@ def render_overview(ov: dict) -> str:
     # Intents timeline
     intents_html = ""
     if ov["intents"]:
-        items = "".join(f'<li class="intent-item">{escape(i)}</li>' for i in ov["intents"])
+        items = "".join(
+            f'<li class="intent-item" data-search-field="intents">{escape(i)}</li>'
+            for i in ov["intents"]
+        )
         intents_html = f'<ol class="intent-list">{items}</ol>'
 
     # User messages summary
     msgs_html = ""
     if ov["user_messages"]:
         items = "".join(
-            f'<li class="user-msg-summary">{escape(m[:200])}{"…" if len(m) > 200 else ""}</li>'
+            f'<li class="user-msg-summary" data-search-field="prompts">{escape(m[:200])}{"…" if len(m) > 200 else ""}</li>'
             for m in ov["user_messages"]
         )
         msgs_html = f'<ol class="user-msg-list">{items}</ol>'
@@ -1542,7 +1569,8 @@ def render_overview(ov: dict) -> str:
         <div class="overview-block overview-block-full">
           <div class="overview-block-title">📍 Context</div>
           <table class="kv-table">
-            <tr><td>Working directory</td><td><code>{escape(ov["cwd"] or "—")}</code></td></tr>
+            <tr><td>Working directory</td><td><code data-search-field="directory">{escape(ov["cwd"] or "—")}</code></td></tr>
+            <tr><td>Model</td><td><code data-search-field="model">{escape(ov.get("model") or "—")}</code></td></tr>
             <tr><td>Branch</td><td><code>{escape(ov["branch"] or "—")}</code></td></tr>
             <tr><td>Commit</td><td><code>{escape((ov["head_commit"] or "—")[:12])}</code></td></tr>
             <tr><td>Session ID</td><td><code>{escape(ov["session_id"] or "—")}</code></td></tr>
@@ -1634,7 +1662,7 @@ def render_turns(turns: list) -> str:
             </details>"""
             else:
                 turn_html += f"""
-            <div class="user-bubble">
+            <div class="user-bubble" data-search-field="prompts">
               <div class="bubble-header">
                 <span class="bubble-role user-role">👤 User</span>
                 <span class="bubble-ts">{ts_str}</span>
@@ -1671,7 +1699,7 @@ def render_steps(steps: list, turn_idx: int) -> str:
         if kind == "reasoning":
             if len(step["content"].strip()) < 200 and "\n" not in step["content"].strip():
                 parts.append(f"""
-            <div class="tool-step reasoning-step reasoning-static" id="{step_id}">
+            <div class="tool-step reasoning-step reasoning-static" id="{step_id}" data-search-field="reasoning">
               <div class="reasoning-header" style="border-left:3px solid #8b5cf6">
                 <span class="tool-icon">🧠</span>
                 <span class="tool-name">reasoning</span>
@@ -1683,7 +1711,7 @@ def render_steps(steps: list, turn_idx: int) -> str:
                 preview = abbreviate(step["content"], 140)
                 preview_html = f'<span class="tool-intent">{escape(preview)}</span>' if preview else ""
                 parts.append(f"""
-            <details class="tool-step reasoning-step" id="{step_id}">
+            <details class="tool-step reasoning-step" id="{step_id}" data-search-field="reasoning">
               <summary class="tool-summary" style="background:#f5f3ff;border-left:3px solid #8b5cf6">
                 <span class="tool-icon">🧠</span>
                 <span class="tool-name">reasoning</span>
@@ -1696,10 +1724,16 @@ def render_steps(steps: list, turn_idx: int) -> str:
             </details>""")
 
         elif kind == "intent":
-            parts.append(f'<div class="intent-step">🎯 <span class="intent-text">{escape(step["content"])}</span></div>')
+            parts.append(
+                f'<div class="intent-step" data-search-field="intents">'
+                f'🎯 <span class="intent-text">{escape(step["content"])}</span></div>'
+            )
 
         elif kind == "text":
-            parts.append(f'<div class="text-step md-body">{markdown_to_html(step["content"])}{raw_link}</div>')
+            parts.append(
+                f'<div class="text-step md-body" data-search-field="replies">'
+                f'{markdown_to_html(step["content"])}{raw_link}</div>'
+            )
 
         elif kind == "subagent":
             name = step.get("name", "Sub-agent")
@@ -1716,7 +1750,7 @@ def render_steps(steps: list, turn_idx: int) -> str:
             result = step.get("result")
 
             parts.append(f"""
-            <details class="tool-step subagent-step" id="{step_id}">
+            <details class="tool-step subagent-step" id="{step_id}" data-search-field="tools">
               <summary class="tool-summary" style="background:#f0f9ff;border-left:3px solid #0ea5e9">
                 <span class="tool-icon">{subagent_icon(name)}</span>
                 <span class="tool-name">{escape(name)}</span>
@@ -1745,13 +1779,20 @@ def render_steps(steps: list, turn_idx: int) -> str:
             if name == "ask_user":
                 summary, selected_answer = _ask_user_summary(args, result)
                 if selected_answer:
-                    answer_html = f'<span class="ask-user-summary-answer">{escape(selected_answer)}</span>'
+                    answer_html = (
+                        '<span class="ask-user-summary-answer" data-search-field="prompts">'
+                        f'{escape(selected_answer)}</span>'
+                    )
 
             status_badge = (
                 '<span class="badge-success">✓</span>' if success
                 else '<span class="badge-fail">✗</span>'
             )
-            summary_html = f'<span class="tool-intent">{escape(summary)}</span>' if summary else ""
+            summary_attr = ' data-search-field="prompts"' if name == "ask_user" else ""
+            summary_html = (
+                f'<span class="tool-intent"{summary_attr}>{escape(summary)}</span>'
+                if summary else ""
+            )
             body_html = (
                 _render_ask_user_interaction(args, result)
                 if name == "ask_user"
@@ -1762,7 +1803,7 @@ def render_steps(steps: list, turn_idx: int) -> str:
             )
 
             parts.append(f"""
-            <details class="tool-step" id="{step_id}">
+            <details class="tool-step" id="{step_id}" data-search-field="tools">
               <summary class="tool-summary" style="background:{bg};border-left:3px solid {border}">
                 <span class="tool-icon">{icon}</span>
                 <span class="tool-name">{escape(name)}</span>
@@ -1830,7 +1871,7 @@ def render_html(overview: dict, turns: list, events: list, source_path: str, a11
             _story_block(p)
             for p in story_text.split("\n\n") if p.strip()
         )
-        story_html = f'<div class="story-body">{paras}</div>'
+        story_html = f'<div class="story-body" data-search-field="story">{paras}</div>'
         story_tab_btn = '<button class="tab-btn" data-tab="story" onclick="showTab(\'story\')">📖 Story</button>'
         story_tab_panel = f'<div id="panel-story" class="tab-panel"><section class="story-section"><h2 class="section-title">📖 Story</h2>{story_html}</section></div>'
     else:
@@ -1893,6 +1934,196 @@ def render_html(overview: dict, turns: list, events: list, source_path: str, a11
 
 OVERVIEW_CSS = _load_asset_text("static/css/overview.css")
 OVERVIEW_JS = _load_asset_text("static/js/overview.js")
+SEARCH_FIELD_ORDER = (
+    "prompts",
+    "replies",
+    "reasoning",
+    "intents",
+    "tools",
+    "directory",
+    "model",
+    "summary",
+    "story",
+)
+SEARCH_FIELD_LABELS = {
+    "prompts": "Prompts",
+    "replies": "Replies",
+    "reasoning": "Reasoning",
+    "intents": "Intents",
+    "tools": "Tools",
+    "directory": "Directory",
+    "model": "Model",
+    "summary": "Summary",
+    "story": "Story",
+}
+SEARCH_TEXT_LIMIT = 8000
+
+
+def _search_text(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    try:
+        return json.dumps(value, ensure_ascii=False, indent=2)
+    except (TypeError, ValueError):
+        return str(value).strip()
+
+
+def _append_search_part(parts: dict[str, list[str]], field: str, value) -> None:
+    text = _search_text(value)
+    if text:
+        parts[field].append(text)
+
+
+def _cap_search_text(text: str, limit: int = SEARCH_TEXT_LIMIT) -> str:
+    text = str(text or "")
+    if len(text) <= limit:
+        return text
+    marker = "\n… [truncated] …\n"
+    available = max(0, limit - len(marker))
+    head_len = available // 2
+    tail_len = available - head_len
+    return text[:head_len] + marker + text[-tail_len:]
+
+
+def _searchable_user_message(content) -> bool:
+    return (
+        isinstance(content, str)
+        and bool(content.strip())
+        and not re.match(r"\s*<skill-context\b", content, re.IGNORECASE)
+        and not re.match(r"\s*<system_reminder\b", content, re.IGNORECASE)
+    )
+
+
+def _build_search_fields(events: list, session_dir: Path, cwd: str, model: str) -> dict[str, str]:
+    parts = {field: [] for field in SEARCH_FIELD_ORDER}
+    tool_records = {}
+    ask_user_records = {}
+    intent_values = []
+    intent_seen = set()
+
+    def get_tool_record(call_id: str, fallback_id: str) -> dict:
+        key = call_id or fallback_id
+        return tool_records.setdefault(
+            key,
+            {
+                "name": "",
+                "arguments": None,
+                "summary": "",
+                "result": None,
+                "agent_name": "",
+            },
+        )
+
+    def add_intent(value) -> None:
+        text = str(value or "").strip()
+        if text and text not in intent_seen:
+            intent_seen.add(text)
+            intent_values.append(text)
+
+    for event_index, event in enumerate(events):
+        event_type = event.get("type", "")
+        data = event.get("data", {})
+
+        if event_type == "user.message":
+            content = data.get("content", "")
+            if _searchable_user_message(content):
+                _append_search_part(parts, "prompts", content)
+        elif event_type == "assistant.message":
+            reasoning = data.get("reasoningText", "").strip()
+            if reasoning:
+                _append_search_part(parts, "reasoning", reasoning)
+
+            content = data.get("content", "").strip()
+            if content:
+                if data.get("phase") == "commentary":
+                    if not reasoning:
+                        _append_search_part(parts, "reasoning", content)
+                else:
+                    _append_search_part(parts, "replies", content)
+
+            for request_index, tool_request in enumerate(data.get("toolRequests", [])):
+                name = tool_request.get("name", "")
+                call_id = tool_request.get("toolCallId", "")
+                record = get_tool_record(call_id, f"assistant-{event_index}-{request_index}")
+                record["name"] = record["name"] or name
+                record["arguments"] = tool_request.get("arguments", record["arguments"])
+                record["summary"] = record["summary"] or (tool_request.get("intentionSummary") or "")
+
+                if name == "report_intent":
+                    add_intent(tool_request.get("arguments", {}).get("intent"))
+                elif name == "ask_user":
+                    ask_user_records[call_id or f"assistant-{event_index}-{request_index}"] = record
+        elif event_type == "tool.execution_start":
+            name = data.get("toolName", "")
+            call_id = data.get("toolCallId", "")
+            record = get_tool_record(call_id, f"start-{event_index}")
+            record["name"] = record["name"] or name
+            record["arguments"] = data.get("arguments", record["arguments"])
+            if name == "report_intent":
+                add_intent(data.get("arguments", {}).get("intent"))
+            elif name == "ask_user":
+                ask_user_records[call_id or f"start-{event_index}"] = record
+        elif event_type == "tool.execution_complete":
+            call_id = data.get("toolCallId", "")
+            record = get_tool_record(call_id, f"complete-{event_index}")
+            record["result"] = data.get("result")
+            if record["name"] == "ask_user":
+                ask_user_records[call_id or f"complete-{event_index}"] = record
+        elif event_type == "subagent.started":
+            call_id = data.get("toolCallId", "")
+            record = get_tool_record(call_id, f"subagent-{event_index}")
+            record["agent_name"] = data.get("agentDisplayName") or data.get("agentName") or ""
+        elif event_type == "session.shutdown":
+            continue
+
+    for record in ask_user_records.values():
+        state = _parse_ask_user_state(record.get("arguments"), record.get("result"))
+        _append_search_part(parts, "prompts", state.get("question"))
+        for choice in state.get("choices", []):
+            _append_search_part(parts, "prompts", choice)
+        _append_search_part(parts, "prompts", state.get("answer"))
+
+    for intent in intent_values:
+        _append_search_part(parts, "intents", intent)
+
+    for record in tool_records.values():
+        name = str(record.get("name") or "").strip()
+        if name == "report_intent":
+            continue
+        agent_name = str(record.get("agent_name") or "").strip()
+        if not name and not agent_name:
+            continue
+
+        tool_parts = []
+        if name:
+            tool_parts.append(name)
+        if agent_name and agent_name != name:
+            tool_parts.append(agent_name)
+        if record.get("summary"):
+            tool_parts.append(str(record["summary"]))
+        if record.get("arguments") not in (None, {}, []):
+            tool_parts.append("Arguments:\n" + _search_text(record["arguments"]))
+        if record.get("result") is not None:
+            tool_parts.append("Result:\n" + _search_text(record["result"]))
+        _append_search_part(parts, "tools", _cap_search_text("\n".join(tool_parts)))
+
+    _append_search_part(parts, "directory", cwd)
+    _append_search_part(parts, "model", model)
+
+    story_path = session_dir / "story.txt"
+    if story_path.exists():
+        try:
+            story_text = _tts_transform(story_path.read_text(encoding="utf-8"))
+        except OSError:
+            story_text = ""
+        _append_search_part(parts, "story", _cap_search_text(story_text))
+
+    return {
+        field: "\n\n".join(values).strip()
+        for field, values in parts.items()
+    }
 
 def read_session(session_dir: Path) -> dict:
     """Extract metadata from a session directory."""
@@ -1909,17 +2140,16 @@ def read_session(session_dir: Path) -> dict:
         "has_story": False,
         "total_premium_requests": 0,
         "model_metrics": {},
+        "search_fields": None,
     }
 
     info["has_story"] = (session_dir / "story.txt").exists()
-
-    parts = []
-    ask_user_calls = set()
 
     jsonl_path = session_dir / "events.jsonl"
     if not jsonl_path.exists():
         return info
 
+    events = []
     try:
         with open(jsonl_path, encoding="utf-8") as f:
             for raw_line in f:
@@ -1930,73 +2160,38 @@ def read_session(session_dir: Path) -> dict:
                     event = json.loads(raw_line)
                 except json.JSONDecodeError:
                     continue
-
-                etype = event.get("type", "")
-                data = event.get("data", {})
-
-                if etype == "session.start":
-                    info["start_time"] = data.get("startTime", event.get("timestamp", ""))
-                    info["cwd"] = data.get("context", {}).get("cwd", "")
-                    info["model"] = data.get("selectedModel", "")
-
-                elif etype == "user.message":
-                    info["user_prompt_count"] += 1
-                    content = data.get("content", "")
-                    if content:
-                        parts.append(content)
-                        if not info["first_prompt"]:
-                            info["first_prompt"] = abbreviate(content)
-
-                elif etype == "assistant.message":
-                    # Collect assistant reasoning and text for searching
-                    reasoning = data.get("reasoningText", "").strip()
-                    if reasoning:
-                        parts.append(reasoning)
-                    text = data.get("content", "").strip()
-                    if text:
-                        parts.append(text)
-                    # embedded tool requests (e.g., report_intent) inside assistant messages
-                    for tr in data.get("toolRequests", []):
-                        tool_request_text = _tool_request_text(tr)
-                        if tool_request_text:
-                            parts.append(tool_request_text)
-
-                elif not info["model"] and "model" in data:
-                    info["model"] = data["model"]
-
-                elif etype == "tool.execution_start":
-                    tool_name = data.get("toolName")
-                    if tool_name == "report_intent" and data.get("arguments", {}).get("intent"):
-                        info["intent_count"] += 1
-                    elif tool_name == "ask_user":
-                        args = data.get("arguments", {})
-                        question = args.get("question", "")
-                        if question:
-                            parts.append(str(question))
-                        choices = args.get("choices", [])
-                        if isinstance(choices, list):
-                            parts.extend(str(choice) for choice in choices if choice is not None)
-                        tool_call_id = data.get("toolCallId")
-                        if tool_call_id:
-                            ask_user_calls.add(tool_call_id)
-
-                elif etype == "tool.execution_complete":
-                    tool_call_id = data.get("toolCallId")
-                    if tool_call_id in ask_user_calls:
-                        answer = _parse_ask_user_state({}, data.get("result")).get("answer")
-                        if answer:
-                            parts.append(answer)
-
-                elif etype == "session.shutdown":
-                    info["total_premium_requests"] = data.get("totalPremiumRequests", 0)
-                    info["model_metrics"] = data.get("modelMetrics", {})
+                events.append(event)
 
     except OSError:
-        pass
+        return info
 
-    # Keep the full searchable conversation so overview filtering can match
-    # any user prompt or Copilot reply across the whole session.
-    info["search_text"] = " ".join(str(part) for part in parts if part)
+    for event in events:
+        event_type = event.get("type", "")
+        data = event.get("data", {})
+        if event_type == "session.start":
+            info["start_time"] = data.get("startTime", event.get("timestamp", ""))
+            info["cwd"] = data.get("context", {}).get("cwd", "")
+            info["model"] = data.get("selectedModel", "")
+        elif event_type == "user.message":
+            info["user_prompt_count"] += 1
+            content = data.get("content", "")
+            if _searchable_user_message(content) and not info["first_prompt"]:
+                info["first_prompt"] = abbreviate(content)
+        elif not info["model"] and "model" in data:
+            info["model"] = data["model"]
+        elif event_type == "tool.execution_start":
+            if data.get("toolName") == "report_intent" and data.get("arguments", {}).get("intent"):
+                info["intent_count"] += 1
+        elif event_type == "session.shutdown":
+            info["total_premium_requests"] = data.get("totalPremiumRequests", 0)
+            info["model_metrics"] = data.get("modelMetrics", {})
+
+    info["search_fields"] = _build_search_fields(events, session_dir, info["cwd"], info["model"])
+    info["search_text"] = " ".join(
+        info["search_fields"].get(field, "")
+        for field in SEARCH_FIELD_ORDER
+        if info["search_fields"].get(field)
+    )
 
     return info
 
@@ -2010,6 +2205,26 @@ def build_overview_html(sessions: list) -> str:
 
         cwd = s["cwd"]
         cwd_display = "/".join(cwd.replace(home, "~").split("/")[-2:]) if cwd else ""
+        raw_search_fields = s.get("search_fields")
+        if isinstance(raw_search_fields, dict):
+            search_fields = {
+                field: str(raw_search_fields.get(field) or "")
+                for field in SEARCH_FIELD_ORDER
+            }
+            directory_values = [str(cwd or ""), cwd_display]
+            search_fields["directory"] = "\n".join(
+                value for value in dict.fromkeys(directory_values) if value
+            )
+            search_fields["model"] = str(s["model"] or "")
+            search_fields["summary"] = str(s.get("summary") or "")
+            search_text = " ".join(
+                search_fields[field]
+                for field in SEARCH_FIELD_ORDER
+                if search_fields[field]
+            )
+        else:
+            search_fields = None
+            search_text = s.get("search_text", "")
         data.append({
             "ts": fmt_ts_long(s["start_time"]),
             "ts_raw": s["start_time"],
@@ -2022,7 +2237,8 @@ def build_overview_html(sessions: list) -> str:
             "has_story": s["has_story"],
             "summary": s.get("summary", ""),
             "prompt": s["first_prompt"],
-            "search": s.get("search_text", ""),
+            "search": search_text,
+            "search_fields": search_fields,
             "link": str(s["events_html"]),
         })
 
@@ -2075,9 +2291,24 @@ def build_overview_html(sessions: list) -> str:
     </div>"""
 
     data_json = json.dumps(data, ensure_ascii=False)
+    data_json = (
+        data_json
+        .replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
     js = COMMON_JS + OVERVIEW_JS.replace("__DATA__", data_json)
     count = len(sessions)
     generated = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+    search_controls_html = "".join(
+        f'<label class="search-field-option">'
+        f'<input type="checkbox" data-search-field="{field}" checked>'
+        f'<span>{escape(SEARCH_FIELD_LABELS[field])}</span>'
+        f"</label>"
+        for field in SEARCH_FIELD_ORDER
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -2099,6 +2330,15 @@ def build_overview_html(sessions: list) -> str:
         <button class="btn" id="btn-expand">Expand all</button>
         <button class="btn" id="btn-collapse">Collapse all</button>
       </div>
+      <fieldset class="search-fields" id="search-fields">
+        <legend>Match in</legend>
+        <div class="search-field-options">{search_controls_html}</div>
+        <div class="search-field-actions">
+          <button class="btn" type="button" id="btn-select-all">All</button>
+          <button class="btn" type="button" id="btn-select-none">None</button>
+        </div>
+      </fieldset>
+      <div class="search-status" id="search-status" role="status" aria-live="polite"></div>
       <table class="sessions-table" id="sessions-table">
         <thead>
           <tr>
@@ -2410,9 +2650,10 @@ def main():
             print("Error: -f/--force is not valid together with --story.", file=sys.stderr)
             sys.exit(1)
         output_path = os.path.join(os.path.dirname(input_path), "events.html")
+        source_mtime = max(effective_source_mtime, _story_mtime(input_path))
         if os.path.exists(output_path) and not args.story:
             out_mtime = os.path.getmtime(output_path)
-            if os.path.getmtime(input_path) <= out_mtime and effective_source_mtime <= out_mtime:
+            if os.path.getmtime(input_path) <= out_mtime and source_mtime <= out_mtime:
                 print(f"Up to date: {output_path}")
                 if managed_session_input:
                     generate_overview()
@@ -2434,9 +2675,10 @@ def main():
         ok = skipped = generated = 0
         for p in paths:
             out = os.path.join(os.path.dirname(p), "events.html")
+            source_mtime = max(effective_source_mtime, _story_mtime(p))
             if os.path.exists(out):
                 out_mtime = os.path.getmtime(out)
-                if os.path.getmtime(p) <= out_mtime and effective_source_mtime <= out_mtime:
+                if os.path.getmtime(p) <= out_mtime and source_mtime <= out_mtime:
                     skipped += 1
                     continue
             try:
@@ -2447,7 +2689,7 @@ def main():
                 print(f"  ✗ {p}: {exc}", file=sys.stderr)
                 skipped += 1
         print(f"\nDone: {ok} written, {skipped} skipped.")
-        if generated:
+        if generated or _overview_needs_refresh():
             generate_overview()
 
 
