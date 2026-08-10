@@ -1,17 +1,50 @@
 .page-title { margin-bottom: 8px; }
 .page-meta { color: #64748b; font-size: 13px; margin-bottom: 16px; }
 .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; }
-.search-bar {
+.search-input-shell {
   flex: 1;
+  min-width: 0;
+  position: relative;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.search-input-shell:focus-within { background: white; }
+.search-highlight {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  color: #334155;
+  font-size: 14px;
+  line-height: normal;
+  pointer-events: none;
+  white-space: pre;
+}
+.search-operator {
+  color: #b45309;
+}
+.search-bar {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  box-sizing: border-box;
   padding: 8px 12px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   font-size: 14px;
   outline: none;
-  background: #f8fafc;
+  background: transparent;
   transition: border-color .15s;
 }
-.search-bar:focus { border-color: #6366f1; background: white; }
+.search-bar:focus { border-color: #6366f1; background: transparent; }
+.search-bar.has-query {
+  color: transparent;
+  caret-color: #334155;
+}
+.search-bar.has-query::selection { background: rgba(99, 102, 241, .25); }
 .btn {
   padding: 6px 12px;
   border: 1px solid #e2e8f0;

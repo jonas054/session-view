@@ -49,6 +49,38 @@ function escHtml(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function highlightSearchQuery(value) {
+  const text = String(value || '');
+  const re = /(^|\s)NOT(?=\s|$)/g;
+  let html = '';
+  let lastIndex = 0;
+  let match;
+
+  while ((match = re.exec(text))) {
+    const operatorStart = match.index + match[1].length;
+    html += escHtml(text.slice(lastIndex, operatorStart));
+    html += '<span class="search-operator">NOT</span>';
+    lastIndex = operatorStart + 3;
+  }
+
+  return html + escHtml(text.slice(lastIndex));
+}
+
+function syncSearchHighlightScroll() {
+  const input = document.getElementById('search');
+  const highlight = document.getElementById('search-highlight');
+  if (input && highlight) highlight.scrollLeft = input.scrollLeft;
+}
+
+function updateSearchHighlight() {
+  const input = document.getElementById('search');
+  const highlight = document.getElementById('search-highlight');
+  if (!input || !highlight) return;
+  highlight.innerHTML = highlightSearchQuery(input.value);
+  input.classList.toggle('has-query', Boolean(input.value));
+  syncSearchHighlightScroll();
+}
+
 function makeSnippet(text, q, maxLen = 140) {
   if (!q || !text) return '';
   const t = String(text);
@@ -319,9 +351,11 @@ document.querySelectorAll('#sessions-table th[data-col]').forEach(th => {
 
 document.getElementById('search').addEventListener('input', e => {
   query = e.target.value;
+  updateSearchHighlight();
   syncSearchUrl(query);
   render();
 });
+document.getElementById('search').addEventListener('scroll', syncSearchHighlightScroll);
 
 document.querySelectorAll('#search-fields input[data-search-field]').forEach(input => {
   input.addEventListener('change', () => {
@@ -347,6 +381,7 @@ document.getElementById('btn-select-none').addEventListener('click', () => {
 window.addEventListener('popstate', () => {
   loadSearchStateFromUrl();
   document.getElementById('search').value = query;
+  updateSearchHighlight();
   render();
 });
 
@@ -366,4 +401,5 @@ document.getElementById('btn-collapse').addEventListener('click', () => {
 
 loadSearchStateFromUrl();
 document.getElementById('search').value = query;
+updateSearchHighlight();
 render();
