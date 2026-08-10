@@ -62,6 +62,7 @@ def test_build_overview_html_embeds_search_payload_and_filters_internal_story_se
     assert "Render the session nicely" in html
     assert "Read the Copilot session below" not in html
     assert "url.searchParams.set('q', value);" in html
+    assert "foo NOT bar" in html
 
 
 def test_build_overview_html_matches_full_and_displayed_directories_like_models():
@@ -90,7 +91,7 @@ def test_build_overview_html_matches_full_and_displayed_directories_like_models(
     assert "function matchesQuery(item, q)" in html
     assert "item.cwd_display" in html
     assert "item.model" in html
-    assert "makeDirectorySnippet(item, q, snippetSize)" in html
+    assert "makeDirectorySnippet(item, positiveQuery, snippetSize)" in html
     assert html.count("matchesQuery(item, q)") >= 2
 
 

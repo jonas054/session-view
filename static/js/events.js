@@ -135,15 +135,18 @@ function applySearchQueryToTurns() {
   updateBackLink(query);
   if (!query) return;
 
+  const highlightQuery = parseSearchQuery(query).positive;
+  if (!highlightQuery) return;
+
   const fields = getSearchFields();
   if (fields && !fields.size) return;
 
   const overviewPanel = document.getElementById('panel-overview');
   const turnsPanel = document.getElementById('panel-turns');
   const storyPanel = document.getElementById('panel-story');
-  const overviewHits = highlightSearchInNode(overviewPanel, query, fields);
-  const turnHits = highlightSearchInNode(turnsPanel, query, fields);
-  const storyHits = highlightSearchInNode(storyPanel, query, fields);
+  const overviewHits = highlightSearchInNode(overviewPanel, highlightQuery, fields);
+  const turnHits = highlightSearchInNode(turnsPanel, highlightQuery, fields);
+  const storyHits = highlightSearchInNode(storyPanel, highlightQuery, fields);
 
   if (storyHits > 0 && turnHits === 0) {
     showTab('story', false);

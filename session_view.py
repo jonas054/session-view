@@ -2326,7 +2326,7 @@ def build_overview_html(sessions: list) -> str:
       <h1 class="page-title"><img src="{_FAVICON_URI}" style="height:1.2em;vertical-align:middle;margin-right:8px;"> Copilot Sessions</h1>
       <p class="page-meta">{count} sessions &nbsp;·&nbsp; generated {generated}</p>
       <div class="toolbar">
-        <input class="search-bar" type="search" placeholder="Filter by prompt, directory, model, or conversation text…" id="search" autofocus>
+        <input class="search-bar" type="search" placeholder="Filter by prompt, directory, model, or text… e.g. foo NOT bar" id="search" autofocus>
         <button class="btn" id="btn-expand">Expand all</button>
         <button class="btn" id="btn-collapse">Collapse all</button>
       </div>

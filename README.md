@@ -16,3 +16,5 @@ node --test tests_js/search.test.js
 ## Overview search
 
 The sessions overview search matches prompts, replies, reasoning, intents, tools, directory, model, summary, and Story text by default. Use the **Match in** checkboxes to narrow the fields, or use **All** and **None** for bulk changes. The query and selected fields are kept in the URL so filtered links can be shared and session-page highlighting preserves the same scope.
+
+Use uppercase `NOT` to exclude matches, for example `foo NOT bar` keeps sessions matching `foo` but excludes sessions matching `bar`. Multiple exclusions are supported with additional `NOT` clauses.

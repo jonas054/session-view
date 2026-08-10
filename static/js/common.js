@@ -36,6 +36,26 @@ function normalizeSearchText(value) {
   return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+function parseSearchQuery(query) {
+  const rawQuery = String(query || "");
+  const parts = rawQuery.split(/(?:^|\s)NOT(?=\s|$)/);
+  const exclusions = parts.slice(1)
+    .map(normalizeSearchText)
+    .filter(Boolean);
+
+  if (!exclusions.length) {
+    return {
+      positive: normalizeSearchText(rawQuery),
+      exclusions: [],
+    };
+  }
+
+  return {
+    positive: normalizeSearchText(parts[0]),
+    exclusions,
+  };
+}
+
 function parseSearchFields(url) {
   if (!url.searchParams.has("match")) return null;
   const raw = url.searchParams.get("match") || "";
@@ -60,14 +80,29 @@ function searchFieldMatches(item, field, query) {
     normalizeSearchText(searchFieldText(item, field)).includes(normalizedQuery);
 }
 
+function searchQueryMatches(item, fields, query) {
+  if (!normalizeSearchText(query)) return true;
+  if (!fields || !fields.size) return false;
+
+  const parsed = parseSearchQuery(query);
+  const matchesClause = clause => SEARCH_FIELDS.some(
+    field => fields.has(field) && searchFieldMatches(item, field, clause)
+  );
+
+  if (parsed.positive && !matchesClause(parsed.positive)) return false;
+  return parsed.exclusions.every(clause => !matchesClause(clause));
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     SEARCH_FIELDS,
     SEARCH_FIELD_LABELS,
     normalizeSearchText,
+    parseSearchQuery,
     parseSearchFields,
     searchFieldsParam,
     searchFieldText,
     searchFieldMatches,
+    searchQueryMatches,
   };
 }

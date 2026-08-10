@@ -4,9 +4,11 @@ const assert = require("node:assert/strict");
 const {
   SEARCH_FIELDS,
   normalizeSearchText,
+  parseSearchQuery,
   parseSearchFields,
   searchFieldsParam,
   searchFieldMatches,
+  searchQueryMatches,
 } = require("../static/js/common.js");
 
 test("search fields have the stable nine-field order", () => {
@@ -30,6 +32,73 @@ test("matching is case-insensitive and collapses whitespace", () => {
       { search_fields: { replies: "Plan\n\tthe output carefully" } },
       "replies",
       "plan the output",
+    ),
+    true,
+  );
+});
+
+test("uppercase standalone NOT splits positive and exclusion clauses", () => {
+  assert.deepEqual(
+    parseSearchQuery("  Foo NOT bar baz NOT Qux "),
+    { positive: "foo", exclusions: ["bar baz", "qux"] },
+  );
+  assert.deepEqual(
+    parseSearchQuery("NOT draft"),
+    { positive: "", exclusions: ["draft"] },
+  );
+  assert.deepEqual(
+    parseSearchQuery("foo not bar"),
+    { positive: "foo not bar", exclusions: [] },
+  );
+  assert.deepEqual(
+    parseSearchQuery("foo NOT"),
+    { positive: "foo not", exclusions: [] },
+  );
+  assert.deepEqual(
+    parseSearchQuery("foo NOT NOT bar"),
+    { positive: "foo", exclusions: ["bar"] },
+  );
+});
+
+test("query matching applies each exclusion across selected fields", () => {
+  const fields = new Set(SEARCH_FIELDS);
+  assert.equal(
+    searchQueryMatches(
+      { search_fields: { prompts: "foo only" } },
+      fields,
+      "foo NOT bar",
+    ),
+    true,
+  );
+  assert.equal(
+    searchQueryMatches(
+      { search_fields: { prompts: "foo", replies: "bar" } },
+      fields,
+      "foo NOT bar",
+    ),
+    false,
+  );
+  assert.equal(
+    searchQueryMatches(
+      { search_fields: { prompts: "foo", replies: "bar" } },
+      new Set(["prompts"]),
+      "foo NOT bar",
+    ),
+    true,
+  );
+  assert.equal(
+    searchQueryMatches(
+      { search_fields: { prompts: "draft notes" } },
+      fields,
+      "NOT draft",
+    ),
+    false,
+  );
+  assert.equal(
+    searchQueryMatches(
+      { search_fields: { prompts: "published notes" } },
+      fields,
+      "NOT draft",
     ),
     true,
   );

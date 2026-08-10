@@ -135,7 +135,7 @@ function fieldMatches(item, field, q) {
 function matchesQuery(item, q) {
   if (!q) return true;
   if (!scopedSearchAvailable || !selectedFields.size) return false;
-  return SEARCH_FIELDS.some(field => fieldMatches(item, field, q));
+  return searchQueryMatches(item, selectedFields, q);
 }
 
 function makeDirectorySnippet(item, q, maxLen) {
@@ -143,18 +143,20 @@ function makeDirectorySnippet(item, q, maxLen) {
 }
 
 function primaryMatchField(item, q) {
-  if (!q || !scopedSearchAvailable || !selectedFields.size) return '';
-  return snippetPriority.find(field => fieldMatches(item, field, q)) || '';
+  const positiveQuery = parseSearchQuery(q).positive;
+  if (!positiveQuery || !scopedSearchAvailable || !selectedFields.size) return '';
+  return snippetPriority.find(field => fieldMatches(item, field, positiveQuery)) || '';
 }
 
 function makePrimarySnippet(item, q, promptMatched, snippetSize) {
   const field = primaryMatchField(item, q);
   if (!field || (field === 'prompts' && promptMatched)) return null;
 
+  const positiveQuery = parseSearchQuery(q).positive;
   const text = searchFieldText(item, field);
   const snippet = field === 'directory'
-    ? makeDirectorySnippet(item, q, snippetSize)
-    : makeSnippet(text, q, field === 'story' ? 2 * snippetSize : 2 * snippetSize);
+    ? makeDirectorySnippet(item, positiveQuery, snippetSize)
+    : makeSnippet(text, positiveQuery, field === 'story' ? 2 * snippetSize : 2 * snippetSize);
   if (!snippet) return null;
   return {
     field,
@@ -208,7 +210,8 @@ function toggleGroup(gk) {
 }
 
 function render() {
-  const q = normalizeSearchText(query);
+  const q = String(query || '').trim();
+  const positiveQuery = parseSearchQuery(q).positive;
   const filtered = DATA.filter(item => matchesQuery(item, q));
 
   filtered.sort((a, b) => {
@@ -253,16 +256,15 @@ function render() {
       tr.className = 'data-row';
       if (gk !== null) tr.dataset.group = gk;
       const promptText = item.prompt || '';
-      const normalizedQuery = normalizeSearchText(q);
       const promptMatched = Boolean(
-        q &&
+        positiveQuery &&
         selectedFields.has('prompts') &&
-        normalizeSearchText(promptText).includes(normalizedQuery)
+        normalizeSearchText(promptText).includes(normalizeSearchText(positiveQuery))
       );
       const sessionHref = buildSessionHref(item.link, sessionHashFor(item, q));
       const storyHref = buildSessionHref(item.link, 'story');
       const promptHtml = promptText
-        ? (promptMatched ? highlightText(promptText, q) : escHtml(promptText))
+        ? (promptMatched ? highlightText(promptText, positiveQuery) : escHtml(promptText))
         : '<em>—</em>';
       tr.innerHTML =
         `<td class="ts">${escHtml(item.ts)}</td>` +
@@ -354,7 +356,7 @@ document.getElementById('btn-expand').addEventListener('click', () => {
 });
 
 document.getElementById('btn-collapse').addEventListener('click', () => {
-  const q = normalizeSearchText(query);
+  const q = String(query || '').trim();
   DATA.filter(item => matchesQuery(item, q)).forEach(item => {
     const gk = getGroupKey(item, sortCol);
     if (gk !== null) collapsed.add(gk);
