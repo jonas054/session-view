@@ -235,8 +235,59 @@ def test_main_batch_mode_skips_up_to_date_outputs(write_session_fixture, monkeyp
     sv.main()
 
     captured = capsys.readouterr()
+    assert "100% [0s] - Up to date:" in captured.out
     assert "Done: 0 written, 1 skipped." in captured.out
     assert not sv._overview_output_path().exists()
+
+
+def test_main_batch_mode_reports_progress_for_skipped_and_written_files(
+    write_session_fixture,
+    monkeypatch,
+    capsys,
+):
+    skipped_dir = write_session_fixture("rich-session.jsonl", session_id="a-skipped")
+    written_dir = write_session_fixture("rich-session.jsonl", session_id="b-written")
+    skipped_input = skipped_dir / "events.jsonl"
+    skipped_output = skipped_dir / "events.html"
+    skipped_output.write_text("already rendered", encoding="utf-8")
+
+    import os
+
+    os.utime(skipped_output, (skipped_input.stat().st_mtime + 100,) * 2)
+    monkeypatch.setattr(sv, "_effective_source_mtime", lambda: 0)
+    clock = iter((0.0, 30.0, 120.0))
+    monkeypatch.setattr(sv.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(sys, "argv", ["session_view.py"])
+
+    sv.main()
+
+    captured = capsys.readouterr()
+    assert " 50% [30s] - Up to date:" in captured.out
+    assert "100% [0s] ✓ " in captured.out
+    assert "Done: 1 written, 1 skipped." in captured.out
+    assert (written_dir / "events.html").exists()
+
+
+@pytest.mark.parametrize(
+    ("seconds", "expected"),
+    [
+        (0, "0s"),
+        (9, "9s"),
+        (69, "1m9s"),
+        (3663, "1h1m3s"),
+    ],
+)
+def test_format_duration(seconds, expected):
+    assert sv._format_duration(seconds) == expected
+
+
+def test_process_file_skips_empty_input(tmp_path, capsys):
+    input_path = tmp_path / "events.jsonl"
+    input_path.write_text("", encoding="utf-8")
+
+    assert sv.process_file(str(input_path), str(tmp_path / "events.html")) is None
+
+    assert "⚠ No events found, skipping:" in capsys.readouterr().err
 
 
 def test_overview_refreshes_when_story_is_newer(write_session_fixture, monkeypatch):

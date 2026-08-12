@@ -32,6 +32,7 @@ import os
 import re
 import sqlite3
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -2638,18 +2639,49 @@ def load_events(input_path: str) -> list:
     return events
 
 
-def process_file(input_path: str, output_path: str, a11y: bool = False, story: bool = False, force: bool = False, language: str = None) -> None:
+def process_file(
+    input_path: str,
+    output_path: str,
+    a11y: bool = False,
+    story: bool = False,
+    force: bool = False,
+    language: str = None,
+    emit_status: bool = True,
+) -> tuple[int, int] | None:
     events = load_events(input_path)
     if not events:
-        print(f"  ⚠ No events found, skipping: {input_path}", file=sys.stderr)
-        return
+        if emit_status:
+            print(f"  ⚠ No events found, skipping: {input_path}", file=sys.stderr)
+        return None
     overview = build_overview(events)
     turns = build_turns(events)
     story_text = generate_story(input_path, force=force, language=language) if story else read_story(input_path)
     html_content = render_html(overview, turns, events, input_path, a11y=a11y, story_text=story_text)
     with open(output_path, "w", encoding="utf-8") as fh:
         fh.write(html_content)
-    print(f"  ✓ {output_path}  ({len(events)} events, {len(turns)} turn(s))")
+    if emit_status:
+        print(f"  ✓ {output_path}  ({len(events)} events, {len(turns)} turn(s))")
+    return len(events), len(turns)
+
+
+def _format_duration(seconds: float) -> str:
+    total_seconds = max(0, int(round(seconds)))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    parts = []
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    if seconds or not parts:
+        parts.append(f"{seconds}s")
+    return "".join(parts)
+
+
+def _batch_progress(index: int, total: int, started: float) -> str:
+    elapsed = time.monotonic() - started
+    eta = elapsed / index * (total - index)
+    return f"{index * 100 / total:3.0f}% [{_format_duration(eta)}]"
 
 
 def main():
@@ -2719,20 +2751,32 @@ def main():
             sys.exit(1)
         print(f"Processing {len(paths)} session file(s)…")
         ok = skipped = generated = 0
-        for p in paths:
+        total = len(paths)
+        batch_started = time.monotonic()
+        for index, p in enumerate(paths, 1):
             out = os.path.join(os.path.dirname(p), "events.html")
             source_mtime = max(effective_source_mtime, _story_mtime(p))
             if os.path.exists(out):
                 out_mtime = os.path.getmtime(out)
                 if os.path.getmtime(p) <= out_mtime and source_mtime <= out_mtime:
+                    progress = _batch_progress(index, total, batch_started)
+                    print(f"{progress} - Up to date: {out}")
                     skipped += 1
                     continue
             try:
-                process_file(p, out, a11y=args.a11y)
-                ok += 1
-                generated += 1
+                result = process_file(p, out, a11y=args.a11y, emit_status=False)
+                progress = _batch_progress(index, total, batch_started)
+                if result is not None:
+                    event_count, turn_count = result
+                    print(f"{progress} ✓ {out}  ({event_count} events, {turn_count} turn(s))")
+                    ok += 1
+                    generated += 1
+                else:
+                    print(f"{progress} ⚠ No events found, skipping: {p}", file=sys.stderr)
+                    skipped += 1
             except Exception as exc:
-                print(f"  ✗ {p}: {exc}", file=sys.stderr)
+                progress = _batch_progress(index, total, batch_started)
+                print(f"{progress} ✗ {p}: {exc}")
                 skipped += 1
         print(f"\nDone: {ok} written, {skipped} skipped.")
         if generated or _overview_needs_refresh():
