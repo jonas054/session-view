@@ -2225,7 +2225,7 @@ def build_overview_html(sessions: list) -> str:
         else:
             search_fields = None
             search_text = s.get("search_text", "")
-        data.append({
+        entry = {
             "ts": fmt_ts_long(s["start_time"]),
             "ts_raw": s["start_time"],
             "cwd": cwd,
@@ -2237,10 +2237,12 @@ def build_overview_html(sessions: list) -> str:
             "has_story": s["has_story"],
             "summary": s.get("summary", ""),
             "prompt": s["first_prompt"],
-            "search": search_text,
             "search_fields": search_fields,
             "link": str(s["events_html"]),
-        })
+        }
+        if search_fields is None:
+            entry["search"] = search_text
+        data.append(entry)
 
     # Aggregate model metrics across all sessions
     agg: dict = {}  # model -> {requests, premium, input_tokens, output_tokens}

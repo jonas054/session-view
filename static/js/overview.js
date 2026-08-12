@@ -4,6 +4,12 @@ let sortAsc = false;
 let query = '';
 let selectedFields = new Set(SEARCH_FIELDS);
 const collapsed = new Set();
+let parsedQueryCacheKey = null;
+let parsedQueryCacheValue = null;
+let searchRenderTimer = null;
+const SEARCH_RENDER_DELAY = 120;
+const sortValueCache = new WeakMap();
+const groupKeyCache = new WeakMap();
 const snippetPriority = [
   "prompts",
   "replies",
@@ -20,27 +26,40 @@ const scopedSearchAvailable = DATA.every(
 );
 
 function getGroupKey(item, col) {
-  if (col === 0) return item.ts.slice(0, 10);       // YYYY-MM-DD
-  if (col === 1) return item.cwd || '(none)';
-  if (col === 2) return item.model || '(unknown)';
-  if (col === 3) return String(item.activity_total);
-  if (col === 4) return String(item.premium_requests || 0);
-  if (col === 5) return item.has_story ? 'yes' : 'no';
-  if (col === 6) return item.summary || '-';
-  const words = (item.prompt || '').trim().split(/\s+/);
-  return words.slice(0, 6).join(' ') + (words.length > 6 ? '…' : '') || '(empty)';
+  let values = groupKeyCache.get(item);
+  if (!values) {
+    const words = (item.prompt || '').trim().split(/\s+/);
+    values = [
+      item.ts.slice(0, 10),       // YYYY-MM-DD
+      item.cwd || '(none)',
+      item.model || '(unknown)',
+      String(item.activity_total),
+      String(item.premium_requests || 0),
+      item.has_story ? 'yes' : 'no',
+      item.summary || '-',
+      words.slice(0, 6).join(' ') + (words.length > 6 ? '…' : '') || '(empty)',
+    ];
+    groupKeyCache.set(item, values);
+  }
+  return values[col];
 }
 
 function getSortVal(item, col) {
-  if (col === 0) return item.ts_raw;
-  if (col === 1) return (item.cwd || '').toLowerCase();
-  if (col === 2) return (item.model || '').toLowerCase();
-  if (col === 3) return item.activity_total;
-  if (col === 4) return item.premium_requests || 0;
-  if (col === 5) return item.has_story ? 1 : 0;
-  if (col === 6) return (item.summary || '').toLowerCase();
-  if (col === 7) return (item.prompt || '').toLowerCase();
-  return '';
+  let values = sortValueCache.get(item);
+  if (!values) {
+    values = [
+      item.ts_raw,
+      (item.cwd || '').toLowerCase(),
+      (item.model || '').toLowerCase(),
+      item.activity_total,
+      item.premium_requests || 0,
+      item.has_story ? 1 : 0,
+      (item.summary || '').toLowerCase(),
+      (item.prompt || '').toLowerCase(),
+    ];
+    sortValueCache.set(item, values);
+  }
+  return values[col] ?? '';
 }
 
 function escHtml(s) {
@@ -160,31 +179,42 @@ function loadSearchStateFromUrl() {
   selectedFields = fields === null ? new Set(SEARCH_FIELDS) : fields;
 }
 
+function getParsedQuery(q) {
+  if (parsedQueryCacheKey === q && parsedQueryCacheValue) return parsedQueryCacheValue;
+  parsedQueryCacheKey = q;
+  parsedQueryCacheValue = parseSearchQuery(q);
+  return parsedQueryCacheValue;
+}
+
 function fieldMatches(item, field, q) {
   return selectedFields.has(field) && searchFieldMatches(item, field, q);
 }
 
-function matchesQuery(item, q) {
-  if (!q) return true;
+function matchesParsedQuery(item, parsedQuery) {
+  if (!parsedQuery.positive && !parsedQuery.exclusions.length) return true;
   if (!scopedSearchAvailable || !selectedFields.size) return false;
-  return searchQueryMatches(item, selectedFields, q);
+  return searchQueryMatchesParsed(item, selectedFields, parsedQuery);
+}
+
+function matchesQuery(item, q) {
+  return matchesParsedQuery(item, getParsedQuery(q));
 }
 
 function makeDirectorySnippet(item, q, maxLen) {
   return makeSnippet(searchFieldText(item, 'directory'), q, maxLen) || '';
 }
 
-function primaryMatchField(item, q) {
-  const positiveQuery = parseSearchQuery(q).positive;
+function primaryMatchField(item, q, parsedQuery) {
+  const positiveQuery = parsedQuery ? parsedQuery.positive : getParsedQuery(q).positive;
   if (!positiveQuery || !scopedSearchAvailable || !selectedFields.size) return '';
   return snippetPriority.find(field => fieldMatches(item, field, positiveQuery)) || '';
 }
 
-function makePrimarySnippet(item, q, promptMatched, snippetSize) {
-  const field = primaryMatchField(item, q);
+function makePrimarySnippet(item, q, promptMatched, snippetSize, parsedQuery) {
+  const field = primaryMatchField(item, q, parsedQuery);
   if (!field || (field === 'prompts' && promptMatched)) return null;
 
-  const positiveQuery = parseSearchQuery(q).positive;
+  const positiveQuery = parsedQuery ? parsedQuery.positive : getParsedQuery(q).positive;
   const text = searchFieldText(item, field);
   const snippet = field === 'directory'
     ? makeDirectorySnippet(item, positiveQuery, snippetSize)
@@ -196,8 +226,8 @@ function makePrimarySnippet(item, q, promptMatched, snippetSize) {
   };
 }
 
-function sessionHashFor(item, q) {
-  const field = primaryMatchField(item, q);
+function sessionHashFor(item, q, parsedQuery) {
+  const field = primaryMatchField(item, q, parsedQuery);
   if (field === 'story') return 'story';
   if (["prompts", "replies", "reasoning", "intents", "tools"].includes(field)) return 'turns';
   if (field) return 'overview';
@@ -241,10 +271,26 @@ function toggleGroup(gk) {
   render();
 }
 
+function cancelScheduledSearchRender() {
+  if (searchRenderTimer === null) return;
+  clearTimeout(searchRenderTimer);
+  searchRenderTimer = null;
+}
+
+function scheduleSearchRender() {
+  cancelScheduledSearchRender();
+  searchRenderTimer = setTimeout(() => {
+    searchRenderTimer = null;
+    render();
+  }, SEARCH_RENDER_DELAY);
+}
+
 function render() {
+  cancelScheduledSearchRender();
   const q = String(query || '').trim();
-  const positiveQuery = parseSearchQuery(q).positive;
-  const filtered = DATA.filter(item => matchesQuery(item, q));
+  const parsedQuery = getParsedQuery(q);
+  const positiveQuery = parsedQuery.positive;
+  const filtered = DATA.filter(item => matchesParsedQuery(item, parsedQuery));
 
   filtered.sort((a, b) => {
     const av = getSortVal(a, sortCol), bv = getSortVal(b, sortCol);
@@ -291,9 +337,9 @@ function render() {
       const promptMatched = Boolean(
         positiveQuery &&
         selectedFields.has('prompts') &&
-        normalizeSearchText(promptText).includes(normalizeSearchText(positiveQuery))
+        normalizeSearchText(promptText).includes(positiveQuery)
       );
-      const sessionHref = buildSessionHref(item.link, sessionHashFor(item, q));
+      const sessionHref = buildSessionHref(item.link, sessionHashFor(item, q, parsedQuery));
       const storyHref = buildSessionHref(item.link, 'story');
       const promptHtml = promptText
         ? (promptMatched ? highlightText(promptText, positiveQuery) : escHtml(promptText))
@@ -311,7 +357,7 @@ function render() {
       frag.appendChild(tr);
 
       if (q && !promptMatched) {
-        const snippet = makePrimarySnippet(item, q, promptMatched, 80);
+        const snippet = makePrimarySnippet(item, q, promptMatched, 80, parsedQuery);
         if (snippet) {
           const sTr = document.createElement('tr');
           sTr.className = 'snippet-row';
@@ -353,7 +399,7 @@ document.getElementById('search').addEventListener('input', e => {
   query = e.target.value;
   updateSearchHighlight();
   syncSearchUrl(query);
-  render();
+  scheduleSearchRender();
 });
 document.getElementById('search').addEventListener('scroll', syncSearchHighlightScroll);
 

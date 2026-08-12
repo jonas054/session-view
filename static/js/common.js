@@ -74,23 +74,46 @@ function searchFieldText(item, field) {
   return String(item.search_fields[field] || "");
 }
 
-function searchFieldMatches(item, field, query) {
-  const normalizedQuery = normalizeSearchText(query);
-  return Boolean(normalizedQuery) &&
-    normalizeSearchText(searchFieldText(item, field)).includes(normalizedQuery);
+const normalizedSearchFieldsCache = new WeakMap();
+
+function normalizedSearchFieldText(item, field) {
+  if (!item || (typeof item !== "object" && typeof item !== "function")) return "";
+
+  let normalizedFields = normalizedSearchFieldsCache.get(item);
+  if (!normalizedFields) {
+    normalizedFields = Object.create(null);
+    normalizedSearchFieldsCache.set(item, normalizedFields);
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(normalizedFields, field)) {
+    normalizedFields[field] = normalizeSearchText(searchFieldText(item, field));
+  }
+  return normalizedFields[field];
 }
 
-function searchQueryMatches(item, fields, query) {
-  if (!normalizeSearchText(query)) return true;
+function searchFieldMatchesNormalized(item, field, normalizedQuery) {
+  return Boolean(normalizedQuery) &&
+    normalizedSearchFieldText(item, field).includes(normalizedQuery);
+}
+
+function searchFieldMatches(item, field, query) {
+  return searchFieldMatchesNormalized(item, field, normalizeSearchText(query));
+}
+
+function searchQueryMatchesParsed(item, fields, parsed) {
+  if (!parsed.positive && !parsed.exclusions.length) return true;
   if (!fields || !fields.size) return false;
 
-  const parsed = parseSearchQuery(query);
   const matchesClause = clause => SEARCH_FIELDS.some(
-    field => fields.has(field) && searchFieldMatches(item, field, clause)
+    field => fields.has(field) && searchFieldMatchesNormalized(item, field, clause)
   );
 
   if (parsed.positive && !matchesClause(parsed.positive)) return false;
   return parsed.exclusions.every(clause => !matchesClause(clause));
+}
+
+function searchQueryMatches(item, fields, query) {
+  return searchQueryMatchesParsed(item, fields, parseSearchQuery(query));
 }
 
 if (typeof module !== "undefined") {
@@ -103,6 +126,7 @@ if (typeof module !== "undefined") {
     searchFieldsParam,
     searchFieldText,
     searchFieldMatches,
+    searchQueryMatchesParsed,
     searchQueryMatches,
   };
 }

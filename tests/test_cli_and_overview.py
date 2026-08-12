@@ -70,6 +70,33 @@ def test_build_overview_html_embeds_search_payload_and_filters_internal_story_se
     assert "line-height: normal;" in html
 
 
+def test_build_overview_html_omits_legacy_search_duplicate_for_scoped_sessions():
+    html = sv.build_overview_html(
+        [{
+            "id": "scoped-session",
+            "events_html": "/tmp/scoped/events.html",
+            "start_time": "2026-05-16T10:00:00Z",
+            "cwd": "/tmp/example/project",
+            "first_prompt": "Scoped prompt",
+            "search_text": "legacy duplicate payload",
+            "search_fields": {
+                field: "searchable content" if field == "prompts" else ""
+                for field in sv.SEARCH_FIELD_ORDER
+            },
+            "model": "gpt-5.4",
+            "user_prompt_count": 1,
+            "intent_count": 0,
+            "has_story": False,
+            "total_premium_requests": 0,
+            "model_metrics": {},
+            "summary": "",
+        }]
+    )
+
+    assert '"search": "legacy duplicate payload"' not in html
+    assert '"search_fields"' in html
+
+
 def test_build_overview_html_matches_full_and_displayed_directories_like_models():
     html = sv.build_overview_html(
         [

@@ -8,6 +8,7 @@ const {
   parseSearchFields,
   searchFieldsParam,
   searchFieldMatches,
+  searchQueryMatchesParsed,
   searchQueryMatches,
 } = require("../static/js/common.js");
 
@@ -101,6 +102,27 @@ test("query matching applies each exclusion across selected fields", () => {
       "NOT draft",
     ),
     true,
+  );
+});
+
+test("parsed query matching keeps normalized clauses reusable", () => {
+  const fields = new Set(SEARCH_FIELDS);
+  const parsed = parseSearchQuery("  Foo NOT bar ");
+  assert.equal(
+    searchQueryMatchesParsed(
+      { search_fields: { prompts: "foo only" } },
+      fields,
+      parsed,
+    ),
+    true,
+  );
+  assert.equal(
+    searchQueryMatchesParsed(
+      { search_fields: { prompts: "foo", replies: "bar" } },
+      fields,
+      parsed,
+    ),
+    false,
   );
 });
 
