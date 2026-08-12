@@ -426,6 +426,56 @@ def _align_diff_lines(lines: list[str], similarity_threshold: float = 0.85) -> l
 # Summarise what happened in the session
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _intent_text(arguments) -> str:
+    if not isinstance(arguments, dict):
+        return ""
+    value = arguments.get("intent")
+    return str(value).strip() if value else ""
+
+
+def _extract_intents(events: list) -> list[str]:
+    intents = []
+    seen_tool_call_ids = set()
+    seen_unidentified_intents = set()
+
+    def add_intent(arguments, tool_call_id) -> None:
+        intent = _intent_text(arguments)
+        if not intent:
+            return
+        if tool_call_id:
+            if tool_call_id in seen_tool_call_ids:
+                return
+            seen_tool_call_ids.add(tool_call_id)
+        elif intent in seen_unidentified_intents:
+            return
+        else:
+            seen_unidentified_intents.add(intent)
+        intents.append(intent)
+
+    # Assistant messages are the primary source; execution events are a
+    # fallback for older or incomplete logs.
+    for event in events:
+        if event.get("type") != "assistant.message":
+            continue
+        data = event.get("data", {})
+        if not isinstance(data, dict):
+            continue
+        for tool_request in data.get("toolRequests") or []:
+            if not isinstance(tool_request, dict) or tool_request.get("name") != "report_intent":
+                continue
+            add_intent(tool_request.get("arguments"), tool_request.get("toolCallId"))
+
+    for event in events:
+        if event.get("type") != "tool.execution_start":
+            continue
+        data = event.get("data", {})
+        if not isinstance(data, dict) or data.get("toolName") != "report_intent":
+            continue
+        add_intent(data.get("arguments"), data.get("toolCallId"))
+
+    return intents
+
+
 def build_overview(events: list) -> dict:
     overview = {
         "session_id": None,
@@ -450,6 +500,7 @@ def build_overview(events: list) -> dict:
         "intents": [],
         "subagents": [],
     }
+    overview["intents"] = _extract_intents(events)
 
     for ev in events:
         t = ev.get("type", "")
@@ -493,10 +544,6 @@ def build_overview(events: list) -> dict:
             name = d.get("toolName", "")
             if name and name != "report_intent":
                 overview["tools_used"][name] = overview["tools_used"].get(name, 0) + 1
-            if name == "report_intent":
-                intent = d.get("arguments", {}).get("intent")
-                if intent:
-                    overview["intents"].append(intent)
 
         elif t == "subagent.started":
             overview["subagents"].append({
@@ -526,7 +573,7 @@ def _empty_turn_state() -> tuple[dict | None, list, list[str], str | None]:
 
 def _tool_request_text(tool_request: dict) -> str:
     if tool_request.get("name") == "report_intent":
-        return tool_request.get("arguments", {}).get("intent", "").strip()
+        return _intent_text(tool_request.get("arguments"))
     return (tool_request.get("intentionSummary") or "").strip()
 
 
@@ -2038,8 +2085,7 @@ def _build_search_fields(events: list, session_dir: Path, cwd: str, model: str) 
     parts = {field: [] for field in SEARCH_FIELD_ORDER}
     tool_records = {}
     ask_user_records = {}
-    intent_values = []
-    intent_seen = set()
+    intent_values = _extract_intents(events)
 
     def get_tool_record(call_id: str, fallback_id: str) -> dict:
         key = call_id or fallback_id
@@ -2053,12 +2099,6 @@ def _build_search_fields(events: list, session_dir: Path, cwd: str, model: str) 
                 "agent_name": "",
             },
         )
-
-    def add_intent(value) -> None:
-        text = str(value or "").strip()
-        if text and text not in intent_seen:
-            intent_seen.add(text)
-            intent_values.append(text)
 
     for event_index, event in enumerate(events):
         event_type = event.get("type", "")
@@ -2089,9 +2129,7 @@ def _build_search_fields(events: list, session_dir: Path, cwd: str, model: str) 
                 record["arguments"] = tool_request.get("arguments", record["arguments"])
                 record["summary"] = record["summary"] or (tool_request.get("intentionSummary") or "")
 
-                if name == "report_intent":
-                    add_intent(tool_request.get("arguments", {}).get("intent"))
-                elif name == "ask_user":
+                if name == "ask_user":
                     ask_user_records[call_id or f"assistant-{event_index}-{request_index}"] = record
         elif event_type == "tool.execution_start":
             name = data.get("toolName", "")
@@ -2099,9 +2137,7 @@ def _build_search_fields(events: list, session_dir: Path, cwd: str, model: str) 
             record = get_tool_record(call_id, f"start-{event_index}")
             record["name"] = record["name"] or name
             record["arguments"] = data.get("arguments", record["arguments"])
-            if name == "report_intent":
-                add_intent(data.get("arguments", {}).get("intent"))
-            elif name == "ask_user":
+            if name == "ask_user":
                 ask_user_records[call_id or f"start-{event_index}"] = record
         elif event_type == "tool.execution_complete":
             call_id = data.get("toolCallId", "")
@@ -2174,7 +2210,6 @@ def read_session(session_dir: Path) -> dict:
         "search_text": "",
         "model": "",
         "user_prompt_count": 0,
-        "intent_count": 0,
         "has_story": False,
         "total_nano_aiu": 0,
         "model_metrics": {},
@@ -2217,9 +2252,6 @@ def read_session(session_dir: Path) -> dict:
                 info["first_prompt"] = abbreviate(content)
         elif not info["model"] and "model" in data:
             info["model"] = data["model"]
-        elif event_type == "tool.execution_start":
-            if data.get("toolName") == "report_intent" and data.get("arguments", {}).get("intent"):
-                info["intent_count"] += 1
         elif event_type == "session.usage_checkpoint":
             total_nano_aiu = _extract_total_nano_aiu(data)
             if total_nano_aiu is not None:
@@ -2275,8 +2307,8 @@ def build_overview_html(sessions: list) -> str:
             "cwd": cwd,
             "cwd_display": cwd_display,
             "model": s["model"],
-            "activity": f'{s["user_prompt_count"]}+{s["intent_count"]}',
-            "activity_total": s["user_prompt_count"] + s["intent_count"],
+            "activity": str(s["user_prompt_count"]),
+            "activity_total": s["user_prompt_count"],
             "ai_credits": s["total_nano_aiu"] / NANO_AIUS_PER_CREDIT,
             "has_story": s["has_story"],
             "summary": s.get("summary", ""),
@@ -2392,7 +2424,7 @@ def build_overview_html(sessions: list) -> str:
             <th data-col="0">Started <span class="sort-ind"> ↓</span></th>
             <th data-col="1">Directory <span class="sort-ind"> ↕</span></th>
             <th data-col="2">Model <span class="sort-ind"> ↕</span></th>
-            <th data-col="3" title="user prompts + agent intents">Prompts+Intents <span class="sort-ind"> ↕</span></th>
+            <th data-col="3" title="user prompts">Prompts <span class="sort-ind"> ↕</span></th>
             <th data-col="4" title="AI credits used">✨ <span class="sort-ind"> ↕</span></th>
             <th data-col="5" title="story available">📖 <span class="sort-ind"> ↕</span></th>
             <th data-col="6">Summary <span class="sort-ind"> ↕</span></th>

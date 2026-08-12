@@ -336,7 +336,7 @@ function render() {
       `<td class="ts">${escHtml(item.ts)}</td>` +
       `<td class="cwd" title="${escHtml(item.cwd)}">${escHtml(item.cwd_display)}</td>` +
       `<td class="model">${escHtml(item.model)}</td>` +
-      `<td class="activity" title="user prompts + agent intents">${escHtml(item.activity)}</td>` +
+      `<td class="activity" title="user prompts">${escHtml(item.activity)}</td>` +
       `<td class="ai-credits num" title="AI credits used">${escHtml(formatAiCredits(item.ai_credits))}</td>` +
       `<td class="story-indicator" title="${item.has_story ? 'Story available' : 'No story'}"><a href="${escHtml(storyHref)}">${item.has_story ? '📖' : ''}</a></td>` +
       `<td class="summary">${item.summary ? escHtml(item.summary) : '<em>-</em>'}</td>` +

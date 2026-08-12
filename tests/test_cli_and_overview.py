@@ -34,7 +34,6 @@ def test_build_overview_html_embeds_search_payload_and_filters_internal_story_se
                 "search_text": "reasoning text and assistant reply",
                 "model": "gpt-5.4",
                 "user_prompt_count": 1,
-                "intent_count": 1,
                 "has_story": True,
                 "total_nano_aiu": 2_000_000_000,
                 "model_metrics": {},
@@ -49,7 +48,6 @@ def test_build_overview_html_embeds_search_payload_and_filters_internal_story_se
                 "search_text": "internal story prompt",
                 "model": "gpt-5.4",
                 "user_prompt_count": 1,
-                "intent_count": 0,
                 "has_story": False,
                 "total_nano_aiu": 0,
                 "model_metrics": {},
@@ -60,6 +58,9 @@ def test_build_overview_html_embeds_search_payload_and_filters_internal_story_se
 
     assert "reasoning text and assistant reply" in html
     assert "Render the session nicely" in html
+    assert '"activity": "1"' in html
+    assert '"activity_total": 1' in html
+    assert 'title="user prompts">Prompts' in html
     assert '"ai_credits": 2.0' in html
     assert "Read the Copilot session below" not in html
     assert "url.searchParams.set('q', value);" in html
@@ -89,7 +90,6 @@ def test_build_overview_html_omits_legacy_search_duplicate_for_scoped_sessions()
             },
             "model": "gpt-5.4",
             "user_prompt_count": 1,
-            "intent_count": 0,
             "has_story": False,
             "total_nano_aiu": 0,
             "model_metrics": {},
@@ -113,7 +113,6 @@ def test_build_overview_html_matches_full_and_displayed_directories_like_models(
                 "search_text": "",
                 "model": "gpt-5.4",
                 "user_prompt_count": 1,
-                "intent_count": 0,
                 "has_story": False,
                 "total_nano_aiu": 0,
                 "model_metrics": {},
@@ -170,7 +169,6 @@ def test_build_overview_html_escapes_script_terminators_in_search_data():
             },
             "model": "gpt-5.4",
             "user_prompt_count": 1,
-            "intent_count": 0,
             "has_story": False,
             "total_nano_aiu": 0,
             "model_metrics": {},

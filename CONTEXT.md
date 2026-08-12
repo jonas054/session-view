@@ -72,7 +72,7 @@ It reads `~/.copilot/session-state/*/events.jsonl` and produces:
 4. Generated story output must be plain text returned directly by the model, with no file writes or tool use inside the story-generation prompt.
 5. Overview search should cover more than the first prompt: prompts, assistant text, reasoning, and intent/tool-summary text are part of the searchable corpus.
 6. Search context should survive navigation from the sessions overview into an individual session page.
-7. `report_intent` contributes to intent tracking but is excluded from the "tools used" counts.
+7. `report_intent` is displayed in session details and search results but does not contribute to the overview activity count; that count contains user prompts only.
 8. Internal story-generation sessions are hidden from the overview when their first prompt starts with `Read the Copilot session`.
 9. Tool output rendering is type-aware: diffs, SQL, grep-style results, line-numbered `view` output, and markdown-capable agent output each have custom presentation rules.
 10. Assistant reasoning may contain markdown and should keep rich formatting.
