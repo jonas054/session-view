@@ -165,7 +165,7 @@
 }
 .mu-table td { padding: 6px 16px 6px 0; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
 .mu-table .num { text-align: right; padding-right: 0; font-variant-numeric: tabular-nums; }
-.mu-premium { color: #7c3aed; font-weight: 600; }
+.mu-ai-credits { color: #7c3aed; font-weight: 600; }
 .mu-total td { border-top: 2px solid #e2e8f0; border-bottom: none; font-weight: 600; }
 /* Search snippet styling */
 .snippet-row td {

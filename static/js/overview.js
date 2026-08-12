@@ -1,5 +1,5 @@
 const DATA = __DATA__;
-let sortCol = 0;   // 0=ts, 1=cwd, 2=model, 3=activity, 4=premium, 5=story, 6=summary, 7=prompt
+let sortCol = 0;   // 0=ts, 1=cwd, 2=model, 3=activity, 4=AI credits, 5=story, 6=summary, 7=prompt
 let sortAsc = false;
 let query = '';
 let selectedFields = new Set(SEARCH_FIELDS);
@@ -33,7 +33,7 @@ function getGroupKey(item, col) {
       item.cwd || '(none)',
       item.model || '(unknown)',
       String(item.activity_total),
-      String(item.premium_requests || 0),
+      String(item.ai_credits || 0),
       item.has_story ? 'yes' : 'no',
       item.summary || '-',
       words.slice(0, 6).join(' ') + (words.length > 6 ? '…' : '') || '(empty)',
@@ -51,7 +51,7 @@ function getSortVal(item, col) {
       (item.cwd || '').toLowerCase(),
       (item.model || '').toLowerCase(),
       item.activity_total,
-      item.premium_requests || 0,
+      item.ai_credits || 0,
       item.has_story ? 1 : 0,
       (item.summary || '').toLowerCase(),
       (item.prompt || '').toLowerCase(),
@@ -65,6 +65,11 @@ function escHtml(s) {
   return String(s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function formatAiCredits(value) {
+  const credits = Number(value || 0);
+  return credits ? Math.round(credits).toLocaleString('en-US') : '';
 }
 
 function highlightSearchQuery(value) {
@@ -332,7 +337,7 @@ function render() {
       `<td class="cwd" title="${escHtml(item.cwd)}">${escHtml(item.cwd_display)}</td>` +
       `<td class="model">${escHtml(item.model)}</td>` +
       `<td class="activity" title="user prompts + agent intents">${escHtml(item.activity)}</td>` +
-      `<td class="premium-requests num" title="premium requests">${item.premium_requests ? escHtml(String(item.premium_requests)) : ''}</td>` +
+      `<td class="ai-credits num" title="AI credits used">${escHtml(formatAiCredits(item.ai_credits))}</td>` +
       `<td class="story-indicator" title="${item.has_story ? 'Story available' : 'No story'}"><a href="${escHtml(storyHref)}">${item.has_story ? '📖' : ''}</a></td>` +
       `<td class="summary">${item.summary ? escHtml(item.summary) : '<em>-</em>'}</td>` +
       `<td class="prompt"><a href="${escHtml(sessionHref)}">${promptHtml}</a></td>`;

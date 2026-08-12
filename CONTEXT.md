@@ -54,7 +54,7 @@ It reads `~/.copilot/session-state/*/events.jsonl` and produces:
 
 ### 3. Sessions overview rendering
 
-- `read_session` scans each session directory and extracts the first prompt, search corpus, model, intent count, premium usage, and story availability.
+- `read_session` scans each session directory and extracts the first prompt, search corpus, model, intent count, AI-credit usage, and story availability.
 - `build_overview_html` creates the all-sessions page data model and embeds it into `static/js/overview.js`.
 - `generate_overview` discovers rendered sessions by scanning for `events.html`, merges persisted summaries, and writes `sessions-overview.html`.
 

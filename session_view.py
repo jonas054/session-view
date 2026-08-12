@@ -203,6 +203,36 @@ def fmt_number(n) -> str:
     return f"{n:,}"
 
 
+NANO_AIUS_PER_CREDIT = 1_000_000_000
+
+
+def fmt_ai_credits(nano_aiu) -> str:
+    if nano_aiu in (None, 0):
+        return "0"
+    credits = nano_aiu / NANO_AIUS_PER_CREDIT
+    return f"{int(credits + 0.5):,}"
+
+
+def _numeric_value(value):
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
+
+
+def _extract_total_nano_aiu(data: dict):
+    total = data.get("totalNanoAiu")
+    if total is not None:
+        return _numeric_value(total)
+
+    model_metrics = data.get("modelMetrics")
+    if not isinstance(model_metrics, dict):
+        return None
+    metric_values = [
+        _numeric_value(metric.get("totalNanoAiu"))
+        for metric in model_metrics.values()
+        if isinstance(metric, dict) and "totalNanoAiu" in metric
+    ]
+    return sum(metric_values) if metric_values else None
+
+
 def escape(text: str) -> str:
     return html.escape(str(text)) if text is not None else ""
 
@@ -407,7 +437,7 @@ def build_overview(events: list) -> dict:
         "head_commit": None,
         "model": None,
         "shutdown_type": None,
-        "total_premium_requests": 0,
+        "total_nano_aiu": 0,
         "total_api_duration_ms": None,
         "files_modified": [],
         "lines_added": 0,
@@ -440,10 +470,17 @@ def build_overview(events: list) -> dict:
             if _searchable_user_message(content):
                 overview["user_messages"].append(content)
 
+        elif t == "session.usage_checkpoint":
+            total_nano_aiu = _extract_total_nano_aiu(d)
+            if total_nano_aiu is not None:
+                overview["total_nano_aiu"] = total_nano_aiu
+
         elif t == "session.shutdown":
             overview["end_time"] = ev.get("timestamp")
             overview["shutdown_type"] = d.get("shutdownType")
-            overview["total_premium_requests"] = d.get("totalPremiumRequests", 0)
+            total_nano_aiu = _extract_total_nano_aiu(d)
+            if total_nano_aiu is not None:
+                overview["total_nano_aiu"] = total_nano_aiu
             overview["total_api_duration_ms"] = d.get("totalApiDurationMs")
             code = d.get("codeChanges", {})
             overview["files_modified"] = code.get("filesModified", [])
@@ -1489,20 +1526,20 @@ def render_overview(ov: dict) -> str:
         rows = []
         for model, m in ov["model_metrics"].items():
             req_count = m.get("requests", {}).get("count", 0)
-            premium = m.get("requests", {}).get("cost", 0)
+            nano_aiu = m.get("totalNanoAiu", 0)
             input_tok = m.get("usage", {}).get("inputTokens", 0)
             output_tok = m.get("usage", {}).get("outputTokens", 0)
             rows.append(f"""
             <tr>
               <td>{escape(model)}</td>
               <td class="num">{fmt_number(req_count)}</td>
-              <td class="num metrics-premium">{fmt_number(premium)}</td>
+              <td class="num metrics-ai-credits">{fmt_ai_credits(nano_aiu)}</td>
               <td class="num">{fmt_number(input_tok)}</td>
               <td class="num">{fmt_number(output_tok)}</td>
             </tr>""")
         metrics_html = f"""
         <table class="metrics-table">
-          <thead><tr><th style="text-align: left">Model</th><th>Requests</th><th>Premium</th><th>Input tokens</th><th>Output tokens</th></tr></thead>
+          <thead><tr><th style="text-align: left">Model</th><th>Requests</th><th>AI credits</th><th>Input tokens</th><th>Output tokens</th></tr></thead>
           <tbody>{''.join(rows)}</tbody>
         </table>"""
 
@@ -1560,7 +1597,7 @@ def render_overview(ov: dict) -> str:
       <div class="overview-meta">
         <span>📅 {date_str}</span>
         <span>⏱ Duration: <strong>{fmt_duration(ov["duration_ms"])}</strong></span>
-        {'<span>✨ Premium requests: <strong>' + fmt_number(ov["total_premium_requests"]) + '</strong></span>' if ov["total_premium_requests"] else ''}
+        {'<span>✨ AI credits: <strong>' + fmt_ai_credits(ov["total_nano_aiu"]) + '</strong></span>' if ov["total_nano_aiu"] else ''}
         {'<span>🔄 Shutdown: <strong>' + escape(ov["shutdown_type"]) + '</strong></span>' if ov["shutdown_type"] else ''}
         {'<span>🔖 Version: <strong>' + escape(ov["copilot_version"]) + '</strong></span>' if ov["copilot_version"] else ''}
       </div>
@@ -2138,7 +2175,7 @@ def read_session(session_dir: Path) -> dict:
         "user_prompt_count": 0,
         "intent_count": 0,
         "has_story": False,
-        "total_premium_requests": 0,
+        "total_nano_aiu": 0,
         "model_metrics": {},
         "search_fields": None,
     }
@@ -2182,8 +2219,14 @@ def read_session(session_dir: Path) -> dict:
         elif event_type == "tool.execution_start":
             if data.get("toolName") == "report_intent" and data.get("arguments", {}).get("intent"):
                 info["intent_count"] += 1
+        elif event_type == "session.usage_checkpoint":
+            total_nano_aiu = _extract_total_nano_aiu(data)
+            if total_nano_aiu is not None:
+                info["total_nano_aiu"] = total_nano_aiu
         elif event_type == "session.shutdown":
-            info["total_premium_requests"] = data.get("totalPremiumRequests", 0)
+            total_nano_aiu = _extract_total_nano_aiu(data)
+            if total_nano_aiu is not None:
+                info["total_nano_aiu"] = total_nano_aiu
             info["model_metrics"] = data.get("modelMetrics", {})
 
     info["search_fields"] = _build_search_fields(events, session_dir, info["cwd"], info["model"])
@@ -2233,7 +2276,7 @@ def build_overview_html(sessions: list) -> str:
             "model": s["model"],
             "activity": f'{s["user_prompt_count"]}+{s["intent_count"]}',
             "activity_total": s["user_prompt_count"] + s["intent_count"],
-            "premium_requests": s["total_premium_requests"] or 0,
+            "ai_credits": s["total_nano_aiu"] / NANO_AIUS_PER_CREDIT,
             "has_story": s["has_story"],
             "summary": s.get("summary", ""),
             "prompt": s["first_prompt"],
@@ -2245,12 +2288,12 @@ def build_overview_html(sessions: list) -> str:
         data.append(entry)
 
     # Aggregate model metrics across all sessions
-    agg: dict = {}  # model -> {requests, premium, input_tokens, output_tokens}
+    agg: dict = {}  # model -> {requests, nano_aiu, input_tokens, output_tokens}
     for s in sessions:
         for model, m in s.get("model_metrics", {}).items():
-            a = agg.setdefault(model, {"requests": 0, "premium": 0, "input_tokens": 0, "output_tokens": 0})
+            a = agg.setdefault(model, {"requests": 0, "nano_aiu": 0, "input_tokens": 0, "output_tokens": 0})
             a["requests"]     += m.get("requests", {}).get("count", 0)
-            a["premium"]      += m.get("requests", {}).get("cost", 0)
+            a["nano_aiu"]     += _numeric_value(m.get("totalNanoAiu"))
             a["input_tokens"] += m.get("usage", {}).get("inputTokens", 0)
             a["output_tokens"]+= m.get("usage", {}).get("outputTokens", 0)
 
@@ -2260,19 +2303,19 @@ def build_overview_html(sessions: list) -> str:
             f"<tr>"
             f"<td>{escape(model)}</td>"
             f'<td class="num">{fmt_number(a["requests"])}</td>'
-            f'<td class="num mu-premium">{fmt_number(a["premium"])}</td>'
+            f'<td class="num mu-ai-credits">{fmt_ai_credits(a["nano_aiu"])}</td>'
             f'<td class="num">{fmt_number(a["input_tokens"])}</td>'
             f'<td class="num">{fmt_number(a["output_tokens"])}</td>'
             f"</tr>"
             for model, a in sorted(agg.items())
         )
-        totals = {k: sum(a[k] for a in agg.values()) for k in ("requests", "premium", "input_tokens", "output_tokens")}
+        totals = {k: sum(a[k] for a in agg.values()) for k in ("requests", "nano_aiu", "input_tokens", "output_tokens")}
         if len(agg) > 1:
             rows += (
                 f'<tr class="mu-total">'
                 f"<td>Total</td>"
                 f'<td class="num">{fmt_number(totals["requests"])}</td>'
-                f'<td class="num mu-premium">{fmt_number(totals["premium"])}</td>'
+                f'<td class="num mu-ai-credits">{fmt_ai_credits(totals["nano_aiu"])}</td>'
                 f'<td class="num">{fmt_number(totals["input_tokens"])}</td>'
                 f'<td class="num">{fmt_number(totals["output_tokens"])}</td>'
                 f"</tr>"
@@ -2284,7 +2327,7 @@ def build_overview_html(sessions: list) -> str:
         <thead><tr>
           <th>Model</th>
           <th>Requests</th>
-          <th>Premium</th>
+          <th>AI credits</th>
           <th>Input tokens</th>
           <th>Output tokens</th>
         </tr></thead>
@@ -2349,7 +2392,7 @@ def build_overview_html(sessions: list) -> str:
             <th data-col="1">Directory <span class="sort-ind"> ↕</span></th>
             <th data-col="2">Model <span class="sort-ind"> ↕</span></th>
             <th data-col="3" title="user prompts + agent intents">Prompts+Intents <span class="sort-ind"> ↕</span></th>
-            <th data-col="4" title="premium requests used">✨ <span class="sort-ind"> ↕</span></th>
+            <th data-col="4" title="AI credits used">✨ <span class="sort-ind"> ↕</span></th>
             <th data-col="5" title="story available">📖 <span class="sort-ind"> ↕</span></th>
             <th data-col="6">Summary <span class="sort-ind"> ↕</span></th>
             <th data-col="7">First prompt <span class="sort-ind"> ↕</span></th>

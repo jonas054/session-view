@@ -13,7 +13,24 @@ def test_build_overview_tracks_metrics_and_excludes_report_intent_from_tools_use
     assert overview["intents"] == ["Rendering session view"]
     assert overview["lines_added"] == 12
     assert overview["lines_removed"] == 3
-    assert overview["total_premium_requests"] == 2
+    assert overview["total_nano_aiu"] == 2_500_000_000
+    html = sv.render_overview(overview)
+    assert "AI credits" in html
+    assert ">3<" in html
+
+
+def test_build_overview_uses_usage_checkpoints_for_ai_credits():
+    events = [
+        {
+            "type": "session.usage_checkpoint",
+            "data": {"totalNanoAiu": 1_250_000_000},
+        },
+    ]
+
+    overview = sv.build_overview(events)
+
+    assert overview["total_nano_aiu"] == 1_250_000_000
+    assert sv.fmt_ai_credits(overview["total_nano_aiu"]) == "1"
 
 
 def test_build_overview_excludes_empty_and_skill_context_user_messages():

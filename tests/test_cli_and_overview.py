@@ -36,7 +36,7 @@ def test_build_overview_html_embeds_search_payload_and_filters_internal_story_se
                 "user_prompt_count": 1,
                 "intent_count": 1,
                 "has_story": True,
-                "total_premium_requests": 2,
+                "total_nano_aiu": 2_000_000_000,
                 "model_metrics": {},
                 "summary": "Merged summary",
             },
@@ -51,7 +51,7 @@ def test_build_overview_html_embeds_search_payload_and_filters_internal_story_se
                 "user_prompt_count": 1,
                 "intent_count": 0,
                 "has_story": False,
-                "total_premium_requests": 0,
+                "total_nano_aiu": 0,
                 "model_metrics": {},
                 "summary": "",
             },
@@ -60,6 +60,7 @@ def test_build_overview_html_embeds_search_payload_and_filters_internal_story_se
 
     assert "reasoning text and assistant reply" in html
     assert "Render the session nicely" in html
+    assert '"ai_credits": 2.0' in html
     assert "Read the Copilot session below" not in html
     assert "url.searchParams.set('q', value);" in html
     assert "foo NOT bar" in html
@@ -90,7 +91,7 @@ def test_build_overview_html_omits_legacy_search_duplicate_for_scoped_sessions()
             "user_prompt_count": 1,
             "intent_count": 0,
             "has_story": False,
-            "total_premium_requests": 0,
+            "total_nano_aiu": 0,
             "model_metrics": {},
             "summary": "",
         }]
@@ -114,7 +115,7 @@ def test_build_overview_html_matches_full_and_displayed_directories_like_models(
                 "user_prompt_count": 1,
                 "intent_count": 0,
                 "has_story": False,
-                "total_premium_requests": 0,
+                "total_nano_aiu": 0,
                 "model_metrics": {},
                 "summary": "",
             },
@@ -171,7 +172,7 @@ def test_build_overview_html_escapes_script_terminators_in_search_data():
             "user_prompt_count": 1,
             "intent_count": 0,
             "has_story": False,
-            "total_premium_requests": 0,
+            "total_nano_aiu": 0,
             "model_metrics": {},
             "summary": "",
         }]
