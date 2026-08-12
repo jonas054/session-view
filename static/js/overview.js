@@ -3,7 +3,6 @@ let sortCol = 0;   // 0=ts, 1=cwd, 2=model, 3=activity, 4=premium, 5=story, 6=su
 let sortAsc = false;
 let query = '';
 let selectedFields = new Set(SEARCH_FIELDS);
-const collapsed = new Set();
 let parsedQueryCacheKey = null;
 let parsedQueryCacheValue = null;
 let searchRenderTimer = null;
@@ -196,10 +195,6 @@ function matchesParsedQuery(item, parsedQuery) {
   return searchQueryMatchesParsed(item, selectedFields, parsedQuery);
 }
 
-function matchesQuery(item, q) {
-  return matchesParsedQuery(item, getParsedQuery(q));
-}
-
 function makeDirectorySnippet(item, q, maxLen) {
   return makeSnippet(searchFieldText(item, 'directory'), q, maxLen) || '';
 }
@@ -266,11 +261,6 @@ function updateSearchStatus(count) {
   }
 }
 
-function toggleGroup(gk) {
-  if (collapsed.has(gk)) collapsed.delete(gk); else collapsed.add(gk);
-  render();
-}
-
 function cancelScheduledSearchRender() {
   if (searchRenderTimer === null) return;
   clearTimeout(searchRenderTimer);
@@ -298,73 +288,65 @@ function render() {
     return sortAsc ? cmp : -cmp;
   });
 
-  const useGroups = true;
   const groupCounts = {};
-  if (useGroups) {
-    filtered.forEach(item => {
-      const gk = getGroupKey(item, sortCol);
-      groupCounts[gk] = (groupCounts[gk] || 0) + 1;
-    });
-  }
+  filtered.forEach(item => {
+    const gk = getGroupKey(item, sortCol);
+    groupCounts[gk] = (groupCounts[gk] || 0) + 1;
+  });
 
   const frag = document.createDocumentFragment();
   let curGroup;
 
   filtered.forEach(item => {
-    const gk = useGroups ? getGroupKey(item, sortCol) : null;
+    const gk = getGroupKey(item, sortCol);
 
     if (gk !== null && gk !== curGroup) {
       curGroup = gk;
-      const isCollapsed = collapsed.has(gk);
       const cnt = groupCounts[gk];
       const tr = document.createElement('tr');
       tr.className = 'group-header';
       tr.dataset.group = gk;
       tr.innerHTML =
         `<td colspan="8">` +
-        `<span class="group-toggle">${isCollapsed ? '▶' : '▼'}</span> ` +
         `<strong>${escHtml(gk)}</strong>` +
         `<span class="group-count">${cnt} session${cnt === 1 ? '' : 's'}</span></td>`;
-      tr.addEventListener('click', () => toggleGroup(gk));
       frag.appendChild(tr);
     }
 
-    if (!useGroups || !collapsed.has(gk)) {
-      const tr = document.createElement('tr');
-      tr.className = 'data-row';
-      if (gk !== null) tr.dataset.group = gk;
-      const promptText = item.prompt || '';
-      const promptMatched = Boolean(
-        positiveQuery &&
-        selectedFields.has('prompts') &&
-        normalizeSearchText(promptText).includes(positiveQuery)
-      );
-      const sessionHref = buildSessionHref(item.link, sessionHashFor(item, q, parsedQuery));
-      const storyHref = buildSessionHref(item.link, 'story');
-      const promptHtml = promptText
-        ? (promptMatched ? highlightText(promptText, positiveQuery) : escHtml(promptText))
-        : '<em>—</em>';
-      tr.innerHTML =
-        `<td class="ts">${escHtml(item.ts)}</td>` +
-        `<td class="cwd" title="${escHtml(item.cwd)}">${escHtml(item.cwd_display)}</td>` +
-        `<td class="model">${escHtml(item.model)}</td>` +
-        `<td class="activity" title="user prompts + agent intents">${escHtml(item.activity)}</td>` +
-        `<td class="premium-requests num" title="premium requests">${item.premium_requests ? escHtml(String(item.premium_requests)) : ''}</td>` +
-        `<td class="story-indicator" title="${item.has_story ? 'Story available' : 'No story'}"><a href="${escHtml(storyHref)}">${item.has_story ? '📖' : ''}</a></td>` +
-        `<td class="summary">${item.summary ? escHtml(item.summary) : '<em>-</em>'}</td>` +
-        `<td class="prompt"><a href="${escHtml(sessionHref)}">${promptHtml}</a></td>`;
-      makeRowClickable(tr, sessionHref);
-      frag.appendChild(tr);
+    const tr = document.createElement('tr');
+    tr.className = 'data-row';
+    tr.dataset.group = gk;
+    const promptText = item.prompt || '';
+    const promptMatched = Boolean(
+      positiveQuery &&
+      selectedFields.has('prompts') &&
+      normalizeSearchText(promptText).includes(positiveQuery)
+    );
+    const sessionHref = buildSessionHref(item.link, sessionHashFor(item, q, parsedQuery));
+    const storyHref = buildSessionHref(item.link, 'story');
+    const promptHtml = promptText
+      ? (promptMatched ? highlightText(promptText, positiveQuery) : escHtml(promptText))
+      : '<em>—</em>';
+    tr.innerHTML =
+      `<td class="ts">${escHtml(item.ts)}</td>` +
+      `<td class="cwd" title="${escHtml(item.cwd)}">${escHtml(item.cwd_display)}</td>` +
+      `<td class="model">${escHtml(item.model)}</td>` +
+      `<td class="activity" title="user prompts + agent intents">${escHtml(item.activity)}</td>` +
+      `<td class="premium-requests num" title="premium requests">${item.premium_requests ? escHtml(String(item.premium_requests)) : ''}</td>` +
+      `<td class="story-indicator" title="${item.has_story ? 'Story available' : 'No story'}"><a href="${escHtml(storyHref)}">${item.has_story ? '📖' : ''}</a></td>` +
+      `<td class="summary">${item.summary ? escHtml(item.summary) : '<em>-</em>'}</td>` +
+      `<td class="prompt"><a href="${escHtml(sessionHref)}">${promptHtml}</a></td>`;
+    makeRowClickable(tr, sessionHref);
+    frag.appendChild(tr);
 
-      if (q && !promptMatched) {
-        const snippet = makePrimarySnippet(item, q, promptMatched, 80, parsedQuery);
-        if (snippet) {
-          const sTr = document.createElement('tr');
-          sTr.className = 'snippet-row';
-          sTr.innerHTML = `<td colspan="8">${snippet.html}</td>`;
-          makeRowClickable(sTr, sessionHref);
-          frag.appendChild(sTr);
-        }
+    if (q && !promptMatched) {
+      const snippet = makePrimarySnippet(item, q, promptMatched, 80, parsedQuery);
+      if (snippet) {
+        const sTr = document.createElement('tr');
+        sTr.className = 'snippet-row';
+        sTr.innerHTML = `<td colspan="8">${snippet.html}</td>`;
+        makeRowClickable(sTr, sessionHref);
+        frag.appendChild(sTr);
       }
     }
   });
@@ -428,20 +410,6 @@ window.addEventListener('popstate', () => {
   loadSearchStateFromUrl();
   document.getElementById('search').value = query;
   updateSearchHighlight();
-  render();
-});
-
-document.getElementById('btn-expand').addEventListener('click', () => {
-  collapsed.clear();
-  render();
-});
-
-document.getElementById('btn-collapse').addEventListener('click', () => {
-  const q = String(query || '').trim();
-  DATA.filter(item => matchesQuery(item, q)).forEach(item => {
-    const gk = getGroupKey(item, sortCol);
-    if (gk !== null) collapsed.add(gk);
-  });
   render();
 });
 

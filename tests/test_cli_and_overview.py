@@ -68,6 +68,9 @@ def test_build_overview_html_embeds_search_payload_and_filters_internal_story_se
     assert ".search-highlight,\n.search-bar" in html
     assert "font-family: inherit;" in html
     assert "line-height: normal;" in html
+    assert 'id="btn-expand"' not in html
+    assert 'id="btn-collapse"' not in html
+    assert "toggleGroup" not in html
 
 
 def test_build_overview_html_omits_legacy_search_duplicate_for_scoped_sessions():
@@ -120,11 +123,10 @@ def test_build_overview_html_matches_full_and_displayed_directories_like_models(
 
     assert '"cwd": "/tmp/example/project"' in html
     assert '"cwd_display": "example/project"' in html
-    assert "function matchesQuery(item, q)" in html
+    assert "function matchesQuery(item, q)" not in html
     assert "item.cwd_display" in html
     assert "item.model" in html
     assert "makeDirectorySnippet(item, positiveQuery, snippetSize)" in html
-    assert html.count("matchesQuery(item, q)") >= 2
 
 
 def test_build_overview_html_renders_scoped_search_controls(rich_session_dir):

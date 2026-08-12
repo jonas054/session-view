@@ -154,10 +154,7 @@
   padding: 7px 12px;
   border-bottom: 1px solid #e2e8f0;
   font-size: 12px;
-  cursor: pointer;
 }
-.group-header:hover td { background: #e2e8f0; }
-.group-toggle { display: inline-block; width: 14px; font-size: 10px; color: #64748b; }
 .group-count { color: #94a3b8; font-weight: normal; margin-left: 6px; font-size: 11px; }
 .mu-section { margin-top: 0; }
 .mu-title { font-size: 1rem; font-weight: 700; margin-bottom: 12px; color: #1e293b; }

@@ -2332,8 +2332,6 @@ def build_overview_html(sessions: list) -> str:
           <div class="search-highlight" id="search-highlight" aria-hidden="true"></div>
           <input class="search-bar" type="search" placeholder="Filter by prompt, directory, model, or text… e.g. foo NOT bar" id="search" autofocus>
         </div>
-        <button class="btn" id="btn-expand">Expand all</button>
-        <button class="btn" id="btn-collapse">Collapse all</button>
         <fieldset class="search-fields" id="search-fields">
           <legend>Match in</legend>
           <div class="search-field-options">{search_controls_html}</div>
