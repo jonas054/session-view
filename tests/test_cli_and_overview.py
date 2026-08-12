@@ -65,6 +65,9 @@ def test_build_overview_html_embeds_search_payload_and_filters_internal_story_se
     assert "foo NOT bar" in html
     assert 'id="search-highlight"' in html
     assert ".search-operator" in html
+    assert ".search-highlight,\n.search-bar" in html
+    assert "font-family: inherit;" in html
+    assert "line-height: normal;" in html
 
 
 def test_build_overview_html_matches_full_and_displayed_directories_like_models():

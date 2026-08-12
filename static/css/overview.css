@@ -9,6 +9,14 @@
   background: #f8fafc;
 }
 .search-input-shell:focus-within { background: white; }
+.search-highlight,
+.search-bar {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  letter-spacing: normal;
+}
 .search-highlight {
   position: absolute;
   inset: 0;
@@ -18,8 +26,6 @@
   border-radius: 8px;
   overflow: hidden;
   color: #334155;
-  font-size: 14px;
-  line-height: normal;
   pointer-events: none;
   white-space: pre;
 }
@@ -34,7 +40,6 @@
   padding: 8px 12px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  font-size: 14px;
   outline: none;
   background: transparent;
   transition: border-color .15s;
