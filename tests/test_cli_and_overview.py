@@ -140,6 +140,11 @@ def test_build_overview_html_renders_scoped_search_controls(rich_session_dir):
     assert 'id="btn-select-none"' in html
     assert 'id="search-status"' in html
     assert 'aria-live="polite"' in html
+    toolbar_start = html.index('<div class="toolbar">')
+    fieldset_start = html.index('<fieldset class="search-fields"', toolbar_start)
+    toolbar_end = html.index('\n      </div>\n      <div class="search-status"', fieldset_start)
+    status_start = html.index('<div class="search-status"', toolbar_start)
+    assert toolbar_start < fieldset_start < toolbar_end < status_start
     for field in sv.SEARCH_FIELD_ORDER:
         assert f'data-search-field="{field}" checked' in html
     assert '"search_fields"' in html

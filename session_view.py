@@ -2334,15 +2334,15 @@ def build_overview_html(sessions: list) -> str:
         </div>
         <button class="btn" id="btn-expand">Expand all</button>
         <button class="btn" id="btn-collapse">Collapse all</button>
+        <fieldset class="search-fields" id="search-fields">
+          <legend>Match in</legend>
+          <div class="search-field-options">{search_controls_html}</div>
+          <div class="search-field-actions">
+            <button class="btn" type="button" id="btn-select-all">All</button>
+            <button class="btn" type="button" id="btn-select-none">None</button>
+          </div>
+        </fieldset>
       </div>
-      <fieldset class="search-fields" id="search-fields">
-        <legend>Match in</legend>
-        <div class="search-field-options">{search_controls_html}</div>
-        <div class="search-field-actions">
-          <button class="btn" type="button" id="btn-select-all">All</button>
-          <button class="btn" type="button" id="btn-select-none">None</button>
-        </div>
-      </fieldset>
       <div class="search-status" id="search-status" role="status" aria-live="polite"></div>
       <table class="sessions-table" id="sessions-table">
         <thead>
