@@ -2792,7 +2792,6 @@ def main():
                 out_mtime = os.path.getmtime(out)
                 if os.path.getmtime(p) <= out_mtime and source_mtime <= out_mtime:
                     progress = _batch_progress(index, total, batch_started)
-                    print(f"{progress} - Up to date: {out}")
                     skipped += 1
                     continue
             try:
