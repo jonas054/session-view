@@ -300,122 +300,18 @@ def json_html(obj) -> str:
     return ''.join(result)
 
 
-def _escape_diff_text(text: str) -> str:
-    return escape(text)
-
-
-def _tokenize_diff_text(text: str) -> list[str]:
-    """Split diff text into words, whitespace, and punctuation tokens."""
-    return re.findall(r"\s+|\w+|[^\w\s]+", text)
-
-
-def _render_intraline_diff(old_text: str, new_text: str) -> tuple[str, str]:
-    """Render a pair of replacement strings with inline change highlights."""
-    old_tokens = _tokenize_diff_text(old_text)
-    new_tokens = _tokenize_diff_text(new_text)
-    matcher = difflib.SequenceMatcher(None, old_tokens, new_tokens)
-    old_parts = []
-    new_parts = []
-    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-        old_chunk = _escape_diff_text("".join(old_tokens[i1:i2]))
-        new_chunk = _escape_diff_text("".join(new_tokens[j1:j2]))
-        if tag == "equal":
-            old_parts.append(old_chunk)
-            new_parts.append(new_chunk)
-        elif tag == "delete":
-            old_parts.append(f'<span class="diff-inline-del">{old_chunk}</span>')
-        elif tag == "insert":
-            new_parts.append(f'<span class="diff-inline-add">{new_chunk}</span>')
-        else:
-            old_parts.append(f'<span class="diff-inline-del">{old_chunk}</span>')
-            new_parts.append(f'<span class="diff-inline-add">{new_chunk}</span>')
-    return "".join(old_parts), "".join(new_parts)
-
-
 def _render_single_diff_line(prefix: str, text: str, line_class: str) -> str:
     suffix = "\n" if text.endswith("\n") else ""
-    return f'<span class="{line_class}">{escape(prefix)}{_escape_diff_text(text.rstrip("\n"))}{suffix}</span>'
+    return f'<span class="{line_class}">{escape(prefix)}{escape(text.rstrip("\n"))}{suffix}</span>'
 
 
-def _render_paired_diff_line(old_line: str, new_line: str) -> tuple[str, str]:
-    old_prefix, old_text = old_line[:1], old_line[1:]
-    new_prefix, new_text = new_line[:1], new_line[1:]
-    old_suffix = "\n" if old_text.endswith("\n") else ""
-    new_suffix = "\n" if new_text.endswith("\n") else ""
-    old_html, new_html = _render_intraline_diff(old_text.rstrip("\n"), new_text.rstrip("\n"))
-    return (
-        f'<span class="diff-del">{escape(old_prefix)}{old_html}{old_suffix}</span>',
-        f'<span class="diff-add">{escape(new_prefix)}{new_html}{new_suffix}</span>',
-    )
-
-
-def _line_body(line: str) -> str:
-    return line[1:].rstrip("\n")
-
-
-def _line_similarity(old_line: str, new_line: str) -> float:
-    return difflib.SequenceMatcher(None, _line_body(old_line), _line_body(new_line)).ratio()
-
-
-def _best_line_matches(
-    source_lines: list[tuple[int, str]],
-    candidate_lines: list[tuple[int, str]],
-) -> dict[int, tuple[int, float]]:
-    matches = {}
-    for source_idx, source_line in source_lines:
-        best_candidate_idx = -1
-        best_score = -1.0
-        for candidate_idx, candidate_line in candidate_lines:
-            score = _line_similarity(source_line, candidate_line)
-            if score > best_score:
-                best_score = score
-                best_candidate_idx = candidate_idx
-        matches[source_idx] = (best_candidate_idx, best_score)
-    return matches
-
-
-def _align_diff_lines(lines: list[str], similarity_threshold: float = 0.85) -> list[str]:
-    """Render a diff line block while pairing the most similar removed/added lines."""
-    removed = [(i, line) for i, line in enumerate(lines) if line.startswith("-")]
-    added = [(i, line) for i, line in enumerate(lines) if line.startswith("+")]
-    if not removed or not added:
-        return [
-            _render_single_diff_line("+", line[1:], "diff-add") if line.startswith("+")
-            else _render_single_diff_line("-", line[1:], "diff-del") if line.startswith("-")
-            else escape(line)
-            for line in lines
-        ]
-
-    best_added_for_removed = _best_line_matches(removed, added)
-    best_removed_for_added = _best_line_matches(added, removed)
-
-    pair_html: dict[int, tuple[str, str]] = {}
-    consumed_added: set[int] = set()
-    last_added_idx = -1
-    for r_idx, r_line in removed:
-        a_idx, score = best_added_for_removed[r_idx]
-        if score < similarity_threshold:
-            continue
-        best_r_idx, best_r_score = best_removed_for_added.get(a_idx, (-1, -1.0))
-        if best_r_idx != r_idx or best_r_score < similarity_threshold:
-            continue
-        if a_idx <= last_added_idx:
-            continue
-        pair_html[r_idx] = _render_paired_diff_line(r_line, lines[a_idx])
-        consumed_added.add(a_idx)
-        last_added_idx = a_idx
-
+def _align_diff_lines(lines: list[str]) -> list[str]:
     rendered = []
-    for idx, line in enumerate(lines):
+
+    for line in lines:
         if line.startswith("-"):
-            pair = pair_html.get(idx)
-            if pair:
-                rendered.append(pair[0] + pair[1])
-            else:
-                rendered.append(_render_single_diff_line("-", line[1:], "diff-del"))
+            rendered.append(_render_single_diff_line("-", line[1:], "diff-del"))
         elif line.startswith("+"):
-            if idx in consumed_added:
-                continue
             rendered.append(_render_single_diff_line("+", line[1:], "diff-add"))
         else:
             rendered.append(escape(line))
