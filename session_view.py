@@ -1930,19 +1930,8 @@ def read_session(session_dir: Path) -> dict:
     if not jsonl_path.exists():
         return info
 
-    events = []
     try:
-        with open(jsonl_path, encoding="utf-8") as f:
-            for raw_line in f:
-                raw_line = raw_line.strip()
-                if not raw_line:
-                    continue
-                try:
-                    event = json.loads(raw_line)
-                except json.JSONDecodeError:
-                    continue
-                events.append(event)
-
+        events = load_events(str(jsonl_path), warn_malformed=False)
     except OSError:
         return info
 
@@ -2218,8 +2207,7 @@ def _parsed_json_path(jsonl_path: str) -> str:
 
 
 def _parse_json_events(jsonl_path: str) -> None:
-    with open(jsonl_path, 'r') as f:
-        events = [json.loads(line) for line in f]
+    events = load_events(jsonl_path, warn_malformed=False)
 
     with open(_parsed_json_path(jsonl_path), 'w', encoding='utf-8') as f:
         user_name = _current_username()
@@ -2365,7 +2353,7 @@ def generate_story(jsonl_path: str, force: bool = False, language: str = None) -
         return None
 
 
-def load_events(input_path: str) -> list:
+def load_events(input_path: str, warn_malformed: bool = True) -> list:
     events = []
     with open(input_path, encoding="utf-8") as fh:
         for lineno, line in enumerate(fh, 1):
@@ -2375,7 +2363,8 @@ def load_events(input_path: str) -> list:
             try:
                 events.append(json.loads(line))
             except json.JSONDecodeError as exc:
-                print(f"Warning: skipping malformed line {lineno} in {input_path}: {exc}", file=sys.stderr)
+                if warn_malformed:
+                    print(f"Warning: skipping malformed line {lineno} in {input_path}: {exc}", file=sys.stderr)
     return events
 
 

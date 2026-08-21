@@ -22,6 +22,14 @@ def test_load_events_skips_malformed_lines(tmp_path, capsys):
     assert "Warning: skipping malformed line 2" in capsys.readouterr().err
 
 
+def test_load_events_can_skip_malformed_lines_quietly(tmp_path, capsys):
+    path = tmp_path / "events.jsonl"
+    path.write_text("not json\n", encoding="utf-8")
+
+    assert sv.load_events(str(path), warn_malformed=False) == []
+    assert capsys.readouterr().err == ""
+
+
 def test_build_overview_html_embeds_search_payload_and_filters_internal_story_sessions():
     html = sv.build_overview_html(
         [
