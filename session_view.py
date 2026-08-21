@@ -2489,8 +2489,7 @@ def main():
                 result = process_file(p, out, a11y=args.a11y, emit_status=False)
                 progress = _batch_progress(index, total, batch_started)
                 if result is not None:
-                    event_count, turn_count = result
-                    print(f"{progress} ✓ {out}  ({event_count} events, {turn_count} turn(s))")
+                    print(f"{progress} ✓ {out}    ", end="\r", flush=True)
                     ok += 1
                     generated += 1
                 else:
