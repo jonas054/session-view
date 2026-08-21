@@ -58,14 +58,7 @@ function updateBackLink(query) {
 }
 
 function closestSearchField(node) {
-  let element = node.parentElement;
-  while (element) {
-    if (element.dataset && element.dataset.searchField) {
-      return element.dataset.searchField;
-    }
-    element = element.parentElement;
-  }
-  return '';
+  return node.parentElement?.closest('[data-search-field]')?.dataset.searchField || '';
 }
 
 function canHighlightNode(node, fields) {
