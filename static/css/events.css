@@ -344,23 +344,7 @@ details[open] > .tool-summary { border-bottom: 1px solid #e2e8f0; }
   line-height: 1.6;
 }
 
-.reasoning-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
 .reasoning-step[open] > .tool-summary { border-bottom-color: #ddd6fe; }
-
-.reasoning-icon {
-  color: #7c3aed;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .02em;
-  text-transform: uppercase;
-}
 
 .reasoning-content > :first-child { margin-top: 0; }
 .reasoning-content > :last-child { margin-bottom: 0; }
@@ -548,7 +532,6 @@ del { color: #94a3b8; text-decoration: line-through; }
 .bubble-header:hover .raw-link,
 .tool-summary:hover .raw-link,
 .text-step:hover .raw-link { opacity: 1; }
-.reasoning-body:hover .raw-link { opacity: 1; }
 .raw-link:hover { color: #6366f1; }
 
 /* ── Nav tabs ── */
