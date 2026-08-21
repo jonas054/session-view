@@ -350,7 +350,7 @@ def test_render_args_and_results_handle_sql_apply_patch_line_numbers_and_diff():
     assert 'class="diff-del"' in diff_html
 
 
-def test_render_args_formats_bulk_insert_sql_as_table():
+def test_render_args_keeps_bulk_insert_sql_as_code():
     html = sv.render_args(
         {
             "description": "Insert todo rows",
@@ -365,15 +365,8 @@ def test_render_args_formats_bulk_insert_sql_as_table():
     )
 
     assert "sql-block" in html
-    assert 'class="md-table"' in html
-    assert ">id<" in html
-    assert ">title<" in html
-    assert ">description<" in html
-    assert ">status<" in html
-    assert ">testing-harness<" in html
-    assert ">Add test harness<" in html
-    assert ">in_progress<" in html
-    assert html.index("sql-block") < html.index('class="md-table"')
+    assert 'class="md-table"' not in html
+    assert "testing-harness" in html
 
 
 def test_render_turns_renders_ask_user_panel_and_selected_choice(read_jsonl_fixture):
