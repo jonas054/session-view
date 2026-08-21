@@ -251,53 +251,7 @@ def abbreviate(text: str, max_len: int = ABBREV_LEN) -> str:
 
 
 def json_html(obj) -> str:
-    """Return syntax-highlighted JSON as HTML."""
-    text = json.dumps(obj, indent=2, ensure_ascii=False)
-    result = []
-    i = 0
-    while i < len(text):
-        ch = text[i]
-        # strings
-        if ch == '"':
-            j = i + 1
-            while j < len(text):
-                if text[j] == '\\':
-                    j += 2
-                    continue
-                if text[j] == '"':
-                    j += 1
-                    break
-                j += 1
-            token = text[i:j]
-            # key or value?
-            rest = text[j:].lstrip()
-            if rest.startswith(':'):
-                result.append(f'<span class="jk">{escape(token)}</span>')
-            else:
-                result.append(f'<span class="js">{escape(token)}</span>')
-            i = j
-        elif ch in '0123456789-':
-            j = i + 1
-            while j < len(text) and text[j] in '0123456789.eE+-':
-                j += 1
-            result.append(f'<span class="jn">{escape(text[i:j])}</span>')
-            i = j
-        elif text[i:i+4] == 'true':
-            result.append('<span class="jb">true</span>')
-            i += 4
-        elif text[i:i+5] == 'false':
-            result.append('<span class="jb">false</span>')
-            i += 5
-        elif text[i:i+4] == 'null':
-            result.append('<span class="jnull">null</span>')
-            i += 4
-        elif ch in '{}[],:':
-            result.append(f'<span class="jp">{escape(ch)}</span>')
-            i += 1
-        else:
-            result.append(escape(ch))
-            i += 1
-    return ''.join(result)
+    return escape(json.dumps(obj, indent=2, ensure_ascii=False))
 
 
 def _render_single_diff_line(prefix: str, text: str, line_class: str) -> str:

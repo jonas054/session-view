@@ -503,13 +503,6 @@ del { color: #94a3b8; text-decoration: line-through; }
 .sql-result .md-table tr:nth-child(even) td { background: #111827; }
 .sql-result .md-table a, .sql-result .md-body a { color: #93c5fd; }
 
-/* JSON syntax highlighting */
-.jk    { color: #93c5fd; }   /* key */
-.js    { color: #86efac; }   /* string value */
-.jn    { color: #fca5a5; }   /* number */
-.jb    { color: #fdba74; }   /* bool */
-.jnull { color: #94a3b8; }   /* null */
-.jp    { color: #cbd5e1; }   /* punctuation */
 .sql-kw  { color: #93c5fd; font-weight: 600; }
 .sql-str { color: #86efac; }
 
