@@ -25,6 +25,7 @@ Flags:
 import argparse
 import base64
 import difflib
+import getpass
 import glob as _glob
 import html
 import json
@@ -77,13 +78,6 @@ def _is_managed_session_events_path(path: str | Path) -> bool:
         return resolved.name == "events.jsonl" and _session_state_dir().resolve() in resolved.parents
     except OSError:
         return False
-
-
-def _current_username() -> str:
-    try:
-        return os.getlogin()
-    except OSError:
-        return os.getenv("USER") or os.getenv("USERNAME") or "unknown"
 
 
 def _run_story_command(cmd):
@@ -2210,7 +2204,7 @@ def _parse_json_events(jsonl_path: str) -> None:
     events = load_events(jsonl_path, warn_malformed=False)
 
     with open(_parsed_json_path(jsonl_path), 'w', encoding='utf-8') as f:
-        user_name = _current_username()
+        user_name = getpass.getuser()
         heading = f"Session with user '{user_name}' and Copilot\n\n"
         f.write(heading)
         for i, event in enumerate(events):

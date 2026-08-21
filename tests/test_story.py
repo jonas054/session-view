@@ -32,7 +32,7 @@ def test_generate_story_writes_cache_from_subprocess_output(rich_session_dir, mo
             stderr="",
         )
 
-    monkeypatch.setattr(sv, "_current_username", lambda: "jonas")
+    monkeypatch.setattr(sv.getpass, "getuser", lambda: "jonas")
     monkeypatch.setattr(sv, "_run_story_command", fake_run)
 
     story = sv.generate_story(str(jsonl_path), force=True, language="Swedish")
@@ -47,7 +47,7 @@ def test_generate_story_writes_cache_from_subprocess_output(rich_session_dir, mo
     assert "do not write it to any file and do not use any tools" in prompt
 
 
-def test_generate_story_falls_back_to_environment_username(rich_session_dir, monkeypatch):
+def test_generate_story_uses_system_username(rich_session_dir, monkeypatch):
     jsonl_path = rich_session_dir / "events.jsonl"
 
     def fake_run(cmd):
@@ -58,8 +58,7 @@ def test_generate_story_falls_back_to_environment_username(rich_session_dir, mon
             stderr="",
         )
 
-    monkeypatch.setattr(sv.os, "getlogin", lambda: (_ for _ in ()).throw(OSError("no tty")))
-    monkeypatch.setenv("USER", "ci-user")
+    monkeypatch.setattr(sv.getpass, "getuser", lambda: "ci-user")
     monkeypatch.setattr(sv, "_run_story_command", fake_run)
 
     sv.generate_story(str(jsonl_path), force=True)
@@ -74,7 +73,7 @@ def test_generate_story_returns_none_on_nonzero_exit(rich_session_dir, monkeypat
     def fake_run(cmd):
         return CompletedProcess(cmd, 1, stdout="", stderr="boom")
 
-    monkeypatch.setattr(sv, "_current_username", lambda: "jonas")
+    monkeypatch.setattr(sv.getpass, "getuser", lambda: "jonas")
     monkeypatch.setattr(sv, "_run_story_command", fake_run)
 
     assert sv.generate_story(str(jsonl_path), force=True) is None
@@ -88,7 +87,7 @@ def test_generate_story_returns_none_on_timeout(rich_session_dir, monkeypatch, c
     def fake_run(_cmd):
         raise TimeoutExpired(cmd="copilot", timeout=600)
 
-    monkeypatch.setattr(sv, "_current_username", lambda: "jonas")
+    monkeypatch.setattr(sv.getpass, "getuser", lambda: "jonas")
     monkeypatch.setattr(sv, "_run_story_command", fake_run)
 
     assert sv.generate_story(str(jsonl_path), force=True) is None
