@@ -2097,7 +2097,7 @@ def build_overview_html(sessions: list) -> str:
       <div class="toolbar">
         <div class="search-input-shell">
           <div class="search-highlight" id="search-highlight" aria-hidden="true"></div>
-          <input class="search-bar" type="search" placeholder="Filter by prompt, directory, model, or text… e.g. foo NOT bar" id="search" autofocus>
+          <input class="search-bar" type="search" placeholder="Filter by prompt, directory, model, or text… e.g. foo bar or &quot;foo bar&quot;" id="search" autofocus>
         </div>
         <fieldset class="search-fields" id="search-fields">
           <legend>Match in</legend>

@@ -72,7 +72,7 @@ def test_build_overview_html_embeds_search_payload_and_filters_internal_story_se
     assert '"ai_credits": 2.0' in html
     assert "Read the Copilot session below" not in html
     assert "url.searchParams.set('q', value);" in html
-    assert "foo NOT bar" in html
+    assert 'e.g. foo bar or &quot;foo bar&quot;' in html
     assert 'id="search-highlight"' in html
     assert ".search-operator" in html
     assert ".search-highlight,\n.search-bar" in html
@@ -134,7 +134,7 @@ def test_build_overview_html_matches_full_and_displayed_directories_like_models(
     assert "function matchesQuery(item, q)" not in html
     assert "item.cwd_display" in html
     assert "item.model" in html
-    assert "makeDirectorySnippet(item, positiveQuery, snippetSize)" in html
+    assert "makeDirectorySnippet(item, positiveClauses, snippetSize)" in html
 
 
 def test_build_overview_html_renders_scoped_search_controls(rich_session_dir):

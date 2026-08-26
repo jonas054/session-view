@@ -74,16 +74,14 @@ function formatAiCredits(value) {
 
 function highlightSearchQuery(value) {
   const text = String(value || '');
-  const re = /(^|\s)NOT(?=\s|$)/g;
+  const operators = searchQueryOperatorPositions(text);
   let html = '';
   let lastIndex = 0;
-  let match;
 
-  while ((match = re.exec(text))) {
-    const operatorStart = match.index + match[1].length;
-    html += escHtml(text.slice(lastIndex, operatorStart));
+  for (const operator of operators) {
+    html += escHtml(text.slice(lastIndex, operator.start));
     html += '<span class="search-operator">NOT</span>';
-    lastIndex = operatorStart + 3;
+    lastIndex = operator.end;
   }
 
   return html + escHtml(text.slice(lastIndex));
@@ -104,20 +102,13 @@ function updateSearchHighlight() {
   syncSearchHighlightScroll();
 }
 
-function makeSnippet(text, q, maxLen = 140) {
-  if (!q || !text) return '';
+function makeSnippet(text, clauses, maxLen = 140) {
+  if (!clauses.length || !text) return '';
   const t = String(text);
-  const tl = t.toLowerCase();
-  const tokens = q.trim().split(/\s+/).filter(Boolean);
-  if (!tokens.length) return '';
-  let firstIdx = -1;
-  for (const tok of tokens) {
-    const idx = tl.indexOf(tok.toLowerCase());
-    if (idx >= 0 && (firstIdx === -1 || idx < firstIdx)) {
-      firstIdx = idx;
-    }
-  }
-  if (firstIdx === -1) return '';
+  const matchRe = searchClausesRegex(clauses, 'i');
+  const match = matchRe ? matchRe.exec(t) : null;
+  if (!match) return '';
+  const firstIdx = match.index;
   const half = Math.floor(maxLen / 2);
   let start = Math.max(0, firstIdx - Math.floor(half/2));
   let end = Math.min(t.length, firstIdx + half);
@@ -125,18 +116,16 @@ function makeSnippet(text, q, maxLen = 140) {
   let snippetText = t.slice(start, end);
   const prefix = start > 0 ? '…' : '';
   const suffix = end < t.length ? '…' : '';
-  const re = new RegExp('(' + tokens.map(escapeRegExp).join('|') + ')', 'gi');
+  const re = searchClausesRegex(clauses);
   const parts = snippetText.split(re);
   const out = parts.map((part, i) => (i % 2 === 1) ? '<mark class="search-match">' + escHtml(part) + '</mark>' : escHtml(part)).join('');
   return prefix + out + suffix;
 }
 
-function highlightText(text, q) {
-  if (!q || !text) return escHtml(text);
+function highlightText(text, clauses) {
+  if (!clauses.length || !text) return escHtml(text);
   const t = String(text);
-  const tokens = q.trim().split(/\s+/).filter(Boolean);
-  if (!tokens.length) return escHtml(text);
-  const re = new RegExp('(' + tokens.map(escapeRegExp).join('|') + ')', 'gi');
+  const re = searchClausesRegex(clauses);
   const parts = t.split(re);
   return parts.map((part, i) => (i % 2 === 1) ? '<mark class="search-match">' + escHtml(part) + '</mark>' : escHtml(part)).join('');
 }
@@ -190,35 +179,37 @@ function getParsedQuery(q) {
   return parsedQueryCacheValue;
 }
 
-function fieldMatches(item, field, q) {
-  return selectedFields.has(field) && searchFieldMatches(item, field, q);
+function fieldMatches(item, field, clause) {
+  return selectedFields.has(field) && searchFieldMatches(item, field, clause.text);
 }
 
 function matchesParsedQuery(item, parsedQuery) {
-  if (!parsedQuery.positive && !parsedQuery.exclusions.length) return true;
+  if (!parsedQuery.positive.length && !parsedQuery.exclusions.length) return true;
   if (!scopedSearchAvailable || !selectedFields.size) return false;
   return searchQueryMatchesParsed(item, selectedFields, parsedQuery);
 }
 
-function makeDirectorySnippet(item, q, maxLen) {
-  return makeSnippet(searchFieldText(item, 'directory'), q, maxLen) || '';
+function makeDirectorySnippet(item, clauses, maxLen) {
+  return makeSnippet(searchFieldText(item, 'directory'), clauses, maxLen) || '';
 }
 
 function primaryMatchField(item, q, parsedQuery) {
-  const positiveQuery = parsedQuery ? parsedQuery.positive : getParsedQuery(q).positive;
-  if (!positiveQuery || !scopedSearchAvailable || !selectedFields.size) return '';
-  return snippetPriority.find(field => fieldMatches(item, field, positiveQuery)) || '';
+  const positiveClauses = parsedQuery ? parsedQuery.positive : getParsedQuery(q).positive;
+  if (!positiveClauses.length || !scopedSearchAvailable || !selectedFields.size) return '';
+  return snippetPriority.find(field =>
+    positiveClauses.some(clause => fieldMatches(item, field, clause))
+  ) || '';
 }
 
 function makePrimarySnippet(item, q, promptMatched, snippetSize, parsedQuery) {
   const field = primaryMatchField(item, q, parsedQuery);
   if (!field || (field === 'prompts' && promptMatched)) return null;
 
-  const positiveQuery = parsedQuery ? parsedQuery.positive : getParsedQuery(q).positive;
+  const positiveClauses = parsedQuery ? parsedQuery.positive : getParsedQuery(q).positive;
   const text = searchFieldText(item, field);
   const snippet = field === 'directory'
-    ? makeDirectorySnippet(item, positiveQuery, snippetSize)
-    : makeSnippet(text, positiveQuery, field === 'story' ? 2 * snippetSize : 2 * snippetSize);
+    ? makeDirectorySnippet(item, positiveClauses, snippetSize)
+    : makeSnippet(text, positiveClauses, field === 'story' ? 2 * snippetSize : 2 * snippetSize);
   if (!snippet) return null;
   return {
     field,
@@ -284,7 +275,7 @@ function render() {
   cancelScheduledSearchRender();
   const q = String(query || '').trim();
   const parsedQuery = getParsedQuery(q);
-  const positiveQuery = parsedQuery.positive;
+  const positiveClauses = parsedQuery.positive;
   const filtered = DATA.filter(item => matchesParsedQuery(item, parsedQuery));
 
   filtered.sort((a, b) => {
@@ -323,14 +314,14 @@ function render() {
     tr.dataset.group = gk;
     const promptText = item.prompt || '';
     const promptMatched = Boolean(
-      positiveQuery &&
+      positiveClauses.length &&
       selectedFields.has('prompts') &&
-      normalizeSearchText(promptText).includes(positiveQuery)
+      positiveClauses.every(clause => searchFieldMatches(item, 'prompts', clause.text))
     );
     const sessionHref = buildSessionHref(item.link, sessionHashFor(item, q, parsedQuery));
     const storyHref = buildSessionHref(item.link, 'story');
     const promptHtml = promptText
-      ? (promptMatched ? highlightText(promptText, positiveQuery) : escHtml(promptText))
+      ? (promptMatched ? highlightText(promptText, positiveClauses) : escHtml(promptText))
       : '<em>—</em>';
     tr.innerHTML =
       `<td class="ts">${escHtml(item.ts)}</td>` +
@@ -344,7 +335,7 @@ function render() {
     makeRowClickable(tr, sessionHref);
     frag.appendChild(tr);
 
-    if (q && !promptMatched) {
+    if (positiveClauses.length && !promptMatched) {
       const snippet = makePrimarySnippet(item, q, promptMatched, 80, parsedQuery);
       if (snippet) {
         const sTr = document.createElement('tr');

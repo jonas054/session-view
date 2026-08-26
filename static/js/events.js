@@ -67,11 +67,11 @@ function canHighlightNode(node, fields) {
   return field ? fields.has(field) : false;
 }
 
-function highlightSearchInNode(root, query, fields) {
-  const tokens = query.trim().split(/\s+/).filter(Boolean);
-  if (!tokens.length || !root || (fields && !fields.size)) return 0;
+function highlightSearchInNode(root, clauses, fields) {
+  if (!clauses.length || !root || (fields && !fields.size)) return 0;
 
-  const re = new RegExp('(' + tokens.map(escapeRegExp).join('|') + ')', 'gi');
+  const re = searchClausesRegex(clauses);
+  if (!re) return 0;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
@@ -128,8 +128,8 @@ function applySearchQueryToTurns() {
   updateBackLink(query);
   if (!query) return;
 
-  const highlightQuery = parseSearchQuery(query).positive;
-  if (!highlightQuery) return;
+  const highlightClauses = parseSearchQuery(query).positive;
+  if (!highlightClauses.length) return;
 
   const fields = getSearchFields();
   if (fields && !fields.size) return;
@@ -137,9 +137,9 @@ function applySearchQueryToTurns() {
   const overviewPanel = document.getElementById('panel-overview');
   const turnsPanel = document.getElementById('panel-turns');
   const storyPanel = document.getElementById('panel-story');
-  const overviewHits = highlightSearchInNode(overviewPanel, highlightQuery, fields);
-  const turnHits = highlightSearchInNode(turnsPanel, highlightQuery, fields);
-  const storyHits = highlightSearchInNode(storyPanel, highlightQuery, fields);
+  const overviewHits = highlightSearchInNode(overviewPanel, highlightClauses, fields);
+  const turnHits = highlightSearchInNode(turnsPanel, highlightClauses, fields);
+  const storyHits = highlightSearchInNode(storyPanel, highlightClauses, fields);
 
   if (storyHits > 0 && turnHits === 0) {
     showTab('story', false);
