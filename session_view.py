@@ -1472,7 +1472,7 @@ def render_turns(turns: list) -> str:
         turn_html += "</div>"
         parts.append(turn_html)
 
-    return "\n".join(parts)
+    return "\n".join(parts) if parts else '<p class="empty-state">No conversation messages were recorded.</p>'
 
 
 def render_steps(steps: list, turn_idx: int) -> str:
@@ -1937,10 +1937,11 @@ def read_session(session_dir: Path) -> dict:
             info["cwd"] = data.get("context", {}).get("cwd", "")
             info["model"] = data.get("selectedModel", "")
         elif event_type == "user.message":
-            info["user_prompt_count"] += 1
             content = data.get("content", "")
-            if _searchable_user_message(content) and not info["first_prompt"]:
-                info["first_prompt"] = abbreviate(content)
+            if _searchable_user_message(content):
+                info["user_prompt_count"] += 1
+                if not info["first_prompt"]:
+                    info["first_prompt"] = abbreviate(content)
         elif not info["model"] and "model" in data:
             info["model"] = data["model"]
         elif event_type == "session.usage_checkpoint":
@@ -1967,8 +1968,9 @@ def build_overview_html(sessions: list) -> str:
     home = str(Path.home())
     data = []
     for s in sessions:
-        if s["first_prompt"].startswith("Read the Copilot session"):
-            continue # Internal session for story generation, not user-initiated
+        first_prompt = str(s.get("first_prompt") or "").strip()
+        if not first_prompt or first_prompt.startswith("Read the Copilot session"):
+            continue  # Not a user-initiated session
 
         cwd = s["cwd"]
         cwd_display = "/".join(cwd.replace(home, "~").split("/")[-2:]) if cwd else ""

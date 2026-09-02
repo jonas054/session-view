@@ -83,6 +83,30 @@ def test_build_overview_html_embeds_search_payload_and_filters_internal_story_se
     assert "toggleGroup" not in html
 
 
+def test_build_overview_html_omits_sessions_without_user_prompts():
+    html = sv.build_overview_html(
+        [
+            {
+                "id": "empty-session",
+                "events_html": "/tmp/empty/events.html",
+                "start_time": "2026-05-16T10:00:00Z",
+                "cwd": "/tmp/example/project",
+                "first_prompt": "",
+                "search_text": "",
+                "model": "gpt-5.4",
+                "user_prompt_count": 0,
+                "has_story": False,
+                "total_nano_aiu": 0,
+                "model_metrics": {},
+                "summary": "",
+            },
+        ]
+    )
+
+    assert "empty-session" not in html
+    assert "/tmp/empty/events.html" not in html
+
+
 def test_build_overview_html_omits_legacy_search_duplicate_for_scoped_sessions():
     html = sv.build_overview_html(
         [{

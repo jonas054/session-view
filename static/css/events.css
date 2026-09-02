@@ -328,6 +328,12 @@ details[open] > .tool-summary { border-bottom: 1px solid #e2e8f0; }
 /* ── Text steps ── */
 .text-step { padding: 4px 0 8px; }
 
+.empty-state {
+  color: #64748b;
+  font-style: italic;
+  padding: 8px 0;
+}
+
 /* ── Reasoning (thinking) steps ── */
 .reasoning-step {
   border-color: #ddd6fe;

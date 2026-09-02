@@ -133,6 +133,12 @@ def test_render_turns_hides_empty_user_messages():
     assert "Still here" in html
 
 
+def test_render_turns_shows_empty_state_when_session_has_no_conversation():
+    html = sv.render_turns([])
+
+    assert html == '<p class="empty-state">No conversation messages were recorded.</p>'
+
+
 def test_render_turns_hides_system_reminder_user_messages():
     events = [
         {"id": "ev-1", "timestamp": "2026-01-01T10:00:00Z", "type": "user.message",
@@ -152,6 +158,25 @@ def test_render_turns_hides_system_reminder_user_messages():
     assert "system_reminder" not in html
     assert "sql_tables" not in html
     assert "Follow-up reply" in html
+
+
+def test_read_session_counts_only_searchable_user_prompts(tmp_path):
+    session_dir = tmp_path / "session"
+    session_dir.mkdir()
+    events = [
+        {"type": "user.message", "data": {"content": ""}},
+        {"type": "user.message", "data": {"content": "<system_reminder>internal</system_reminder>"}},
+        {"type": "user.message", "data": {"content": "Actual prompt"}},
+    ]
+    (session_dir / "events.jsonl").write_text(
+        "\n".join(json.dumps(event) for event in events) + "\n",
+        encoding="utf-8",
+    )
+
+    info = sv.read_session(session_dir)
+
+    assert info["user_prompt_count"] == 1
+    assert info["first_prompt"] == "Actual prompt"
 
 
 def test_build_turns_reconstructs_reasoning_intent_tool_and_subagent_steps(rich_events):
