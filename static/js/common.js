@@ -36,6 +36,12 @@ function normalizeSearchText(value) {
   return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+function searchTextMatches(value, query) {
+  const normalizedQuery = normalizeSearchText(query);
+  return Boolean(normalizedQuery) &&
+    normalizeSearchText(value).includes(normalizedQuery);
+}
+
 function tokenizeSearchQuery(query) {
   const rawQuery = String(query || "");
   const tokens = [];
@@ -196,6 +202,7 @@ if (typeof module !== "undefined") {
     SEARCH_FIELDS,
     SEARCH_FIELD_LABELS,
     normalizeSearchText,
+    searchTextMatches,
     parseSearchQuery,
     searchQueryOperatorPositions,
     parseSearchFields,

@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   SEARCH_FIELDS,
   normalizeSearchText,
+  searchTextMatches,
   parseSearchQuery,
   searchQueryOperatorPositions,
   parseSearchFields,
@@ -32,6 +33,8 @@ test("search fields have the stable nine-field order", () => {
 
 test("matching is case-insensitive and collapses whitespace", () => {
   assert.equal(normalizeSearchText("  Plan\n  the\toutput "), "plan the output");
+  assert.equal(searchTextMatches("First prompt", "analytics"), false);
+  assert.equal(searchTextMatches("First\nanalytics prompt", "ANALYTICS"), true);
   assert.equal(
     searchFieldMatches(
       { search_fields: { replies: "Plan\n\tthe output carefully" } },
@@ -40,6 +43,19 @@ test("matching is case-insensitive and collapses whitespace", () => {
     ),
     true,
   );
+});
+
+test("a match in another prompt is not treated as a match in the displayed prompt", () => {
+  const item = {
+    prompt: "First prompt",
+    search_fields: { prompts: "First prompt\n\nAnalytics follow-up" },
+  };
+
+  assert.equal(
+    searchQueryMatches(item, new Set(["prompts"]), "analytics"),
+    true,
+  );
+  assert.equal(searchTextMatches(item.prompt, "analytics"), false);
 });
 
 test("uppercase standalone NOT splits positive and exclusion clauses", () => {

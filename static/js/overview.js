@@ -316,7 +316,7 @@ function render() {
     const promptMatched = Boolean(
       positiveClauses.length &&
       selectedFields.has('prompts') &&
-      positiveClauses.every(clause => searchFieldMatches(item, 'prompts', clause.text))
+      positiveClauses.every(clause => searchTextMatches(promptText, clause.text))
     );
     const sessionHref = buildSessionHref(item.link, sessionHashFor(item, q, parsedQuery));
     const storyHref = buildSessionHref(item.link, 'story');
