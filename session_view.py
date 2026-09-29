@@ -232,16 +232,6 @@ def escape(text: str) -> str:
     return html.escape(str(text)) if text is not None else ""
 
 
-_SKILL_CONTEXT_RE = re.compile(r'\s*<skill-context\s+name=["\']?([^"\'>\s]+)["\']?', re.IGNORECASE)
-
-
-def skill_context_name(content: str | None) -> str | None:
-    if not content:
-        return None
-    match = _SKILL_CONTEXT_RE.match(content)
-    return match.group(1) if match else None
-
-
 ABBREV_LEN = 200
 
 
@@ -788,7 +778,10 @@ def _render_text_with_line_numbers(content: str) -> str:
     return f'<pre class="result-pre">{"".join(rows)}</pre>'
 
 
-_ASK_USER_RESULT_PREFIX_RE = re.compile(r"^\s*User\s+(?:selected|answered|responded):\s*", re.IGNORECASE)
+_ASK_USER_RESULT_PREFIX_RE = re.compile(
+    r"^\s*User\s+(?:selected|answered|responded):\s*",
+    re.IGNORECASE,
+)
 
 
 def _normalize_inline_text(text: str) -> str:
@@ -796,106 +789,166 @@ def _normalize_inline_text(text: str) -> str:
 
 
 def _extract_result_text(result) -> str:
+    texts = _extract_result_texts(result)
+    return texts[0] if texts else ""
+
+
+def _extract_result_texts(result) -> list[str]:
     if result is None:
-        return ""
+        return []
     if isinstance(result, dict):
-        text = result.get("content") or result.get("detailedContent")
-        return text if isinstance(text, str) else ""
-    return str(result)
+        return [
+            text
+            for key in ("content", "detailedContent")
+            if isinstance(text := result.get(key), str) and text.strip()
+        ]
+    return [str(result)]
 
 
-def _requested_schema_field(args: dict) -> dict:
-    requested_schema = args.get("requestedSchema") if isinstance(args, dict) else None
+def _normalize_ask_user_value(value) -> str:
+    return _normalize_inline_text("" if value is None else str(value))
+
+
+def _ask_user_value_key(value) -> str:
+    return _normalize_ask_user_value(value).casefold()
+
+
+def _add_ask_user_alternative(
+    alternatives: list[dict],
+    seen: set[tuple[str | None, str]],
+    value,
+    label,
+    field: str | None = None,
+) -> None:
+    value_key = _ask_user_value_key(value)
+    seen_key = (field, value_key)
+    if seen_key in seen:
+        return
+    seen.add(seen_key)
+
+    display_label = _normalize_ask_user_value(label)
+    if not display_label:
+        display_label = _normalize_ask_user_value(value)
+    alternatives.append({"value": value, "label": display_label, "field": field})
+
+
+def _schema_ask_user_alternatives(requested_schema) -> list[dict]:
     if not isinstance(requested_schema, dict):
-        return {}
+        return []
 
+    alternatives = []
+    seen = set()
     properties = requested_schema.get("properties")
     if isinstance(properties, dict):
-        fields = properties
-    elif "type" in requested_schema or "oneOf" in requested_schema or "enum" in requested_schema:
-        fields = {"value": requested_schema}
+        property_items = properties.items()
+    elif any(key in requested_schema for key in ("type", "oneOf", "enum")):
+        property_items = [(None, requested_schema)]
     else:
-        fields = requested_schema
+        property_items = requested_schema.items()
 
-    return next(
-        (field for field in fields.values() if isinstance(field, dict)),
-        {},
-    )
+    for field, schema in property_items:
+        if not isinstance(schema, dict):
+            continue
+        field = str(field) if field is not None else None
+        one_of = schema.get("oneOf")
+        if isinstance(one_of, list):
+            for option in one_of:
+                if not isinstance(option, dict):
+                    _add_ask_user_alternative(alternatives, seen, option, option, field)
+                    continue
+                if "const" in option:
+                    _add_ask_user_alternative(
+                        alternatives,
+                        seen,
+                        option["const"],
+                        option.get("title") or option.get("description"),
+                        field,
+                    )
+                elif isinstance(option.get("enum"), list):
+                    for value in option["enum"]:
+                        _add_ask_user_alternative(
+                            alternatives,
+                            seen,
+                            value,
+                            option.get("title") or option.get("description") or value,
+                            field,
+                        )
+
+        elif isinstance(schema.get("enum"), list):
+            for value in schema["enum"]:
+                _add_ask_user_alternative(alternatives, seen, value, value, field)
+        elif schema.get("type") == "boolean":
+            for value, label in ((True, "Yes"), (False, "No")):
+                _add_ask_user_alternative(alternatives, seen, value, label, field)
+
+    return alternatives
 
 
-def _requested_schema_choices(args: dict) -> tuple[list[str], dict[str, str]]:
-    field = _requested_schema_field(args)
-    choices = []
-    choice_values = {}
-
-    def add_choice(label, value=None) -> None:
-        label = str(label).strip() if label is not None else ""
-        if not label:
-            return
-        choices.append(label)
-        if value is not None:
-            choice_values[_normalize_inline_text(value).casefold()] = label
-
-    one_of = field.get("oneOf")
-    if isinstance(one_of, list):
-        for option in one_of:
-            if isinstance(option, dict):
-                value = option.get("const")
-                label = option.get("title") or option.get("description") or value
-                add_choice(label, value if value is not None else label)
-            else:
-                add_choice(option)
-    else:
-        enum = field.get("enum")
-        if isinstance(enum, list):
-            for value in enum:
-                add_choice(value, value)
-
-    if not choices and field.get("type") == "boolean":
-        add_choice("Yes", True)
-        add_choice("No", False)
-
-    return choices, choice_values
+def _normalize_ask_user_answer(text: str, fields: set[str]) -> str:
+    answer = _ASK_USER_RESULT_PREFIX_RE.sub("", _normalize_inline_text(text)).strip()
+    for field in sorted(fields, key=len, reverse=True):
+        field_match = re.match(rf"^{re.escape(field)}\s*:\s*(.+)$", answer, re.IGNORECASE)
+        if field_match:
+            return field_match.group(1).strip()
+    return answer
 
 
 def _parse_ask_user_state(args, result) -> dict:
     question = ""
-    choices = []
-    choice_values = {}
+    alternatives = []
     allow_freeform = False
     if isinstance(args, dict):
         question = str(args.get("question") or args.get("message") or "").strip()
         raw_choices = args.get("choices") or []
         if isinstance(raw_choices, list):
-            choices = [str(choice) for choice in raw_choices if choice is not None]
-            choice_values = {
-                _normalize_inline_text(choice).casefold(): choice
-                for choice in choices
-            }
-        if not choices:
-            choices, choice_values = _requested_schema_choices(args)
-        allow_freeform = bool(args.get("allow_freeform"))
+            for choice in raw_choices:
+                if choice is not None:
+                    alternatives.append({
+                        "value": choice,
+                        "label": _normalize_ask_user_value(choice),
+                        "field": None,
+                    })
+        if not alternatives:
+            alternatives = _schema_ask_user_alternatives(args.get("requestedSchema"))
+        allow_freeform = bool(args.get("allow_freeform") or args.get("allowFreeform"))
 
-    raw_answer = _normalize_inline_text(_extract_result_text(result))
-    answer = _ASK_USER_RESULT_PREFIX_RE.sub("", raw_answer).strip()
-    normalized_answer = _normalize_inline_text(answer).casefold()
+    fields = {alternative["field"] for alternative in alternatives if alternative["field"]}
+    answers = [
+        _normalize_ask_user_answer(text, fields)
+        for text in _extract_result_texts(result)
+    ]
+    answers = [answer for answer in answers if answer]
+    answer = answers[0] if answers else ""
 
-    selected_choice = ""
-    if normalized_answer:
-        selected_choice = choice_values.get(normalized_answer, "")
-        if not selected_choice:
-            for choice in choices:
-                if _normalize_inline_text(choice).casefold() == normalized_answer:
-                    selected_choice = choice
-                    break
+    selected_index = None
+    for candidate in answers:
+        candidate_key = _ask_user_value_key(candidate)
+        for index, alternative in enumerate(alternatives):
+            if candidate_key in {
+                _ask_user_value_key(alternative["value"]),
+                _ask_user_value_key(alternative["label"]),
+            }:
+                selected_index = index
+                break
+        if selected_index is not None:
+            break
+
+    choices = [alternative["label"] for alternative in alternatives]
+    selected_choice = (
+        alternatives[selected_index]["label"]
+        if selected_index is not None
+        else ""
+    )
 
     return {
         "question": question,
         "choices": choices,
+        "alternatives": alternatives,
         "allow_freeform": allow_freeform,
         "answer": answer,
         "selected_choice": selected_choice,
-        "custom_answer": answer if answer and not selected_choice else "",
+        "selected_index": selected_index,
+        "custom_answer": answer if answer and selected_index is None else "",
     }
 
 
@@ -918,8 +971,9 @@ def _render_ask_user_interaction(args, result) -> str:
 
     if state["choices"]:
         items = []
-        for choice in state["choices"]:
-            selected = choice == state["selected_choice"]
+        for index, alternative in enumerate(state["alternatives"]):
+            choice = alternative["label"]
+            selected = index == state["selected_index"]
             choice_class = "ask-user-choice ask-user-choice-selected" if selected else "ask-user-choice"
             badge = '<span class="ask-user-choice-badge">✓ Selected</span>' if selected else ""
             items.append(
@@ -1502,8 +1556,12 @@ def render_turns(turns: list) -> str:
             ev_id = um.get("event_id", "")
             raw_link = _raw_event_link(ev_id)
             content = um["content"]
-            skill_name = skill_context_name(content)
-            if skill_name:
+            if not content.strip():
+                pass
+            elif re.match(r'\s*<system_reminder\b', content, re.IGNORECASE):
+                pass
+            elif skill_match := re.match(r'\s*<skill-context\s+name=["\']?([^"\'>\s]+)["\']?', content, re.IGNORECASE):
+                skill_name = skill_match.group(1)
                 turn_html += f"""
             <details class="tool-step skill-context-step" id="turn-{i}-skill">
               <summary class="tool-summary" style="background:#fffbeb;border-left:3px solid #f59e0b">

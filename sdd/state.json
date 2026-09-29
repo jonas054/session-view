@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "active_spec": "specs/001-ask-user-alternatives",
+  "phases": {
+    "plan": "complete",
+    "implement": "complete",
+    "validate": "complete"
+  }
+}

@@ -85,6 +85,14 @@ def test_build_overview_excludes_empty_and_skill_context_user_messages():
         {"type": "user.message", "data": {"content": "Keep this one too"}},
     ]
 
+    overview = sv.build_overview(events)
+    html = sv.render_overview(overview)
+
+    assert overview["user_messages"] == ["Keep this message", "Keep this one too"]
+    assert html.count('class="user-msg-summary"') == 2
+    assert "skill-context" not in html
+
+
 def test_build_overview_excludes_skill_context_user_messages():
     overview = sv.build_overview(
         [
@@ -114,8 +122,10 @@ def test_build_overview_excludes_skill_context_user_messages():
         ]
     )
 
-    assert overview["user_messages"] == ["Keep this message", "Keep this one too"]
-    assert html.count('class="user-msg-summary"') == 2
+    html = sv.render_overview(overview)
+
+    assert overview["user_messages"] == ["Render the session nicely"]
+    assert html.count('class="user-msg-summary"') == 1
     assert "skill-context" not in html
 
 
@@ -451,6 +461,121 @@ def test_render_turns_formats_skill_context_as_skill_step():
     assert "skill: diagnose" in html
     assert "Base directory for this skill" in html
     assert "👤 User" not in html
+
+
+def test_render_steps_renders_current_ask_user_schema_and_selected_title():
+    arguments = {
+        "message": "Which rendering approach should I use?",
+        "requestedSchema": {
+            "properties": {
+                "approach": {
+                    "oneOf": [
+                        {
+                            "const": "double_horizontal_render",
+                            "title": "Yes — render both views horizontally",
+                        },
+                        {
+                            "const": "direction_timing",
+                            "title": "No — use direction and timing",
+                        },
+                    ],
+                },
+            },
+        },
+    }
+
+    content_html = sv.render_steps(
+        [{
+            "kind": "tool",
+            "name": "ask_user",
+            "arguments": arguments,
+            "result": {"content": "User responded: double_horizontal_render"},
+            "success": True,
+        }],
+        0,
+    )
+    detailed_content_html = sv.render_steps(
+        [{
+            "kind": "tool",
+            "name": "ask_user",
+            "arguments": arguments,
+            "result": {"detailedContent": "approach: direction_timing"},
+            "success": True,
+        }],
+        0,
+    )
+
+    assert "Which rendering approach should I use?" in content_html
+    assert "Yes — render both views horizontally" in content_html
+    assert "No — use direction and timing" in content_html
+    assert content_html.count('class="ask-user-choice ask-user-choice-selected"') == 1
+    assert "Yes — render both views horizontally" in content_html.split(
+        'class="ask-user-summary-answer"', 1
+    )[1]
+    assert "double_horizontal_render" not in content_html
+
+    assert detailed_content_html.count('class="ask-user-choice ask-user-choice-selected"') == 1
+    assert "No — use direction and timing" in detailed_content_html.split(
+        'class="ask-user-summary-answer"', 1
+    )[1]
+    assert "direction_timing" not in detailed_content_html
+
+
+def test_render_steps_derives_enum_ask_user_alternatives():
+    html = sv.render_steps(
+        [{
+            "kind": "tool",
+            "name": "ask_user",
+            "arguments": {
+                "message": "Which output format should I use?",
+                "requestedSchema": {
+                    "properties": {
+                        "format": {
+                            "enum": ["markdown", "html"],
+                        },
+                    },
+                },
+            },
+            "result": {"content": "format: html"},
+            "success": True,
+        }],
+        0,
+    )
+
+    assert "Which output format should I use?" in html
+    assert "markdown" in html
+    assert "html" in html
+    assert html.count('class="ask-user-choice ask-user-choice-selected"') == 1
+
+
+def test_render_steps_shows_unmatched_current_ask_user_answer_as_custom():
+    html = sv.render_steps(
+        [{
+            "kind": "tool",
+            "name": "ask_user",
+            "arguments": {
+                "message": "What should I show next?",
+                "requestedSchema": {
+                    "properties": {
+                        "answer": {
+                            "oneOf": [
+                                {"const": "summary", "title": "A short summary"},
+                                {"const": "diff", "title": "The complete diff"},
+                            ],
+                        },
+                    },
+                },
+            },
+            "result": {"content": "User responded: an answer of my own"},
+            "success": True,
+        }],
+        0,
+    )
+
+    assert "an answer of my own" in html
+    assert "A short summary" in html
+    assert "The complete diff" in html
+    assert "ask-user-choice-selected" not in html
 
 
 def test_render_steps_shows_custom_ask_user_answer_without_guessing_choice():
