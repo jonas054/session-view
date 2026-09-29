@@ -804,15 +804,76 @@ def _extract_result_text(result) -> str:
     return str(result)
 
 
+def _requested_schema_field(args: dict) -> dict:
+    requested_schema = args.get("requestedSchema") if isinstance(args, dict) else None
+    if not isinstance(requested_schema, dict):
+        return {}
+
+    properties = requested_schema.get("properties")
+    if isinstance(properties, dict):
+        fields = properties
+    elif "type" in requested_schema or "oneOf" in requested_schema or "enum" in requested_schema:
+        fields = {"value": requested_schema}
+    else:
+        fields = requested_schema
+
+    return next(
+        (field for field in fields.values() if isinstance(field, dict)),
+        {},
+    )
+
+
+def _requested_schema_choices(args: dict) -> tuple[list[str], dict[str, str]]:
+    field = _requested_schema_field(args)
+    choices = []
+    choice_values = {}
+
+    def add_choice(label, value=None) -> None:
+        label = str(label).strip() if label is not None else ""
+        if not label:
+            return
+        choices.append(label)
+        if value is not None:
+            choice_values[_normalize_inline_text(value).casefold()] = label
+
+    one_of = field.get("oneOf")
+    if isinstance(one_of, list):
+        for option in one_of:
+            if isinstance(option, dict):
+                value = option.get("const")
+                label = option.get("title") or option.get("description") or value
+                add_choice(label, value if value is not None else label)
+            else:
+                add_choice(option)
+    else:
+        enum = field.get("enum")
+        if isinstance(enum, list):
+            for value in enum:
+                add_choice(value, value)
+
+    if not choices and field.get("type") == "boolean":
+        add_choice("Yes", True)
+        add_choice("No", False)
+
+    return choices, choice_values
+
+
 def _parse_ask_user_state(args, result) -> dict:
     question = ""
     choices = []
+    choice_values = {}
     allow_freeform = False
     if isinstance(args, dict):
-        question = str(args.get("question", "") or "").strip()
+        question = str(args.get("question") or args.get("message") or "").strip()
         raw_choices = args.get("choices") or []
         if isinstance(raw_choices, list):
             choices = [str(choice) for choice in raw_choices if choice is not None]
+            choice_values = {
+                _normalize_inline_text(choice).casefold(): choice
+                for choice in choices
+            }
+        if not choices:
+            choices, choice_values = _requested_schema_choices(args)
         allow_freeform = bool(args.get("allow_freeform"))
 
     raw_answer = _normalize_inline_text(_extract_result_text(result))
@@ -821,10 +882,12 @@ def _parse_ask_user_state(args, result) -> dict:
 
     selected_choice = ""
     if normalized_answer:
-        for choice in choices:
-            if _normalize_inline_text(choice).casefold() == normalized_answer:
-                selected_choice = choice
-                break
+        selected_choice = choice_values.get(normalized_answer, "")
+        if not selected_choice:
+            for choice in choices:
+                if _normalize_inline_text(choice).casefold() == normalized_answer:
+                    selected_choice = choice
+                    break
 
     return {
         "question": question,

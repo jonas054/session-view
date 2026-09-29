@@ -479,6 +479,115 @@ def test_render_steps_shows_custom_ask_user_answer_without_guessing_choice():
     assert "ask-user-choice-selected" not in html
 
 
+def test_render_steps_renders_requested_schema_choices_and_selected_title():
+    html = sv.render_steps(
+        [{
+            "kind": "tool",
+            "name": "ask_user",
+            "arguments": {
+                "message": "Which temperature policy should I use?",
+                "requestedSchema": {
+                    "properties": {
+                        "temperature_policy": {
+                            "type": "string",
+                            "title": "Temperature policy",
+                            "oneOf": [
+                                {
+                                    "const": "finite_values",
+                                    "title": "Accept finite values (recommended)",
+                                },
+                                {
+                                    "const": "bounded_values",
+                                    "title": "Restrict values to a cooking range",
+                                },
+                                {
+                                    "const": "other",
+                                    "title": "Another policy (describe it)",
+                                },
+                            ],
+                        },
+                    },
+                },
+            },
+            "result": {"content": "User responded: finite_values"},
+            "success": True,
+            "ts_start": "2026-05-16T10:00:00Z",
+            "ts_end": "2026-05-16T10:00:01Z",
+        }],
+        0,
+    )
+
+    assert "Which temperature policy should I use?" in html
+    assert "Accept finite values (recommended)" in html
+    assert "Restrict values to a cooking range" in html
+    assert "Another policy (describe it)" in html
+    assert html.count('<li class="ask-user-choice') == 3
+    assert 'class="ask-user-choice ask-user-choice-selected"' in html
+    assert "✓ Selected" in html
+
+
+def test_render_steps_renders_direct_requested_schema_without_result():
+    html = sv.render_steps(
+        [{
+            "kind": "tool",
+            "name": "ask_user",
+            "arguments": {
+                "message": "Which model should I use?",
+                "requestedSchema": {
+                    "model": {
+                        "type": "string",
+                        "oneOf": [
+                            {"const": "observed", "title": "Use observed readings"},
+                            {"const": "fixed", "title": "Use a fixed rate"},
+                        ],
+                    },
+                },
+            },
+            "result": None,
+            "success": False,
+            "ts_start": "2026-05-16T10:00:00Z",
+            "ts_end": "2026-05-16T10:00:01Z",
+        }],
+        0,
+    )
+
+    assert "Which model should I use?" in html
+    assert "Use observed readings" in html
+    assert "Use a fixed rate" in html
+    assert html.count('<li class="ask-user-choice') == 2
+
+
+def test_render_steps_renders_boolean_requested_schema_choices():
+    html = sv.render_steps(
+        [{
+            "kind": "tool",
+            "name": "ask_user",
+            "arguments": {
+                "message": "Should I use the consolidated design?",
+                "requestedSchema": {
+                    "properties": {
+                        "confirm_design": {
+                            "type": "boolean",
+                            "title": "Confirm design",
+                        },
+                    },
+                },
+            },
+            "result": {"content": "User responded: true"},
+            "success": True,
+            "ts_start": "2026-05-16T10:00:00Z",
+            "ts_end": "2026-05-16T10:00:01Z",
+        }],
+        0,
+    )
+
+    assert "Should I use the consolidated design?" in html
+    assert ">Yes<" in html
+    assert ">No<" in html
+    assert html.count('<li class="ask-user-choice') == 2
+    assert 'class="ask-user-choice ask-user-choice-selected"' in html
+
+
 def test_markdown_to_html_renders_lists_tables_and_inline_markup():
     html = sv.markdown_to_html(
         "**Bold** and `code`\n\n"
