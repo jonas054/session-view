@@ -2634,6 +2634,7 @@ def main():
                 if os.path.getmtime(p) <= out_mtime and source_mtime <= out_mtime:
                     progress = _batch_progress(index, total, batch_started)
                     skipped += 1
+                    print(f"{progress} - Up to date: {out}", end="\r", flush=True)
                     continue
             try:
                 result = process_file(p, out, a11y=args.a11y, emit_status=False)
