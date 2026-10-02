@@ -2377,7 +2377,7 @@ def generate_story(jsonl_path: str, force: bool = False, language: str = None) -
 
     # Some available models: gpt-4.1 (0x), gpt-5-mini (0x), gpt-5.4-mini (0.33x),
     # claude-haiku-4.5 (0x33x), claude-sonnet-4.6 (1x)
-    model = "gpt-5.6-luna"
+    model = "gpt-6-luna"
     effort = "max"
     language = language or "English"
     user_name = _get_user_name()
