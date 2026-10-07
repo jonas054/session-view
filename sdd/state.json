@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "active_spec": "specs/001-ask-user-alternatives",
+  "active_spec": "specs/002-session-store-sql-tables",
   "phases": {
     "plan": "complete",
     "implement": "complete",

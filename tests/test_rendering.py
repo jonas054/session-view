@@ -411,6 +411,30 @@ def test_render_args_and_results_handle_sql_apply_patch_line_numbers_and_diff():
     assert 'class="diff-del"' in diff_html
 
 
+def test_session_store_sql_result_renders_markdown_table():
+    result = {
+        "content": (
+            "| id | name |\n"
+            "| --- | --- |\n"
+            "| 1 | Alice |\n"
+            "| 2 | Bob |"
+        )
+    }
+
+    html = sv.render_tool_result(result, "session_store_sql")
+    sql_html = sv.render_tool_result(result, "sql")
+    other_tool_html = sv.render_tool_result(result, "example_tool")
+
+    assert '<div class="sql-result md-body">' in html
+    assert '<table class="md-table">' in html
+    assert "<th>id</th>" in html
+    assert "<td>Alice</td>" in html
+    assert "| --- | --- |" not in html
+    assert '<table class="md-table">' in sql_html
+    assert '<pre class="result-pre">' in other_tool_html
+    assert "| --- | --- |" in other_tool_html
+
+
 def test_render_args_keeps_bulk_insert_sql_as_code():
     html = sv.render_args(
         {

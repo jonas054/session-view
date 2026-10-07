@@ -1007,7 +1007,7 @@ def _render_ask_user_interaction(args, result) -> str:
 def _render_result_text(content: str, tool_name: str = "", args=None) -> str:
     if tool_name == "grep":
         return _render_grep_result(content, args)
-    if tool_name == "sql":
+    if tool_name in {"sql", "session_store_sql"}:
         return f'<div class="sql-result md-body">{markdown_to_html(content)}</div>'
     if tool_name in _MARKDOWN_AGENT_NAMES:
         return f'<div class="agent-result md-body">{markdown_to_html(content)}</div>'

@@ -74,7 +74,7 @@ It reads `~/.copilot/session-state/*/events.jsonl` and produces:
 6. Search context should survive navigation from the sessions overview into an individual session page.
 7. `report_intent` is displayed in session details and search results but does not contribute to the overview activity count; that count contains user prompts only.
 8. Internal story-generation sessions are hidden from the overview when their first prompt starts with `Read the Copilot session`.
-9. Tool output rendering is type-aware: diffs, SQL, grep-style results, line-numbered `view` output, and markdown-capable agent output each have custom presentation rules.
+9. Tool output rendering is type-aware: diffs, SQL results (including Markdown tables from `session_store_sql`), grep-style results, line-numbered `view` output, and markdown-capable agent output each have custom presentation rules.
 10. Assistant reasoning may contain markdown and should keep rich formatting.
 11. Multiline tool arguments must stay readable; bash, SQL, edit diffs, and `apply_patch` get special handling, and bulk SQL `VALUES` inserts may be rendered as tables.
 12. The accessible mode (`--a11y`) is a palette override, not a separate rendering pipeline.
