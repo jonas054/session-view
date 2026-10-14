@@ -2,7 +2,7 @@
   "version": 1,
   "repository_abbreviation": "SV",
   "last_allocated": {
-    "REQ": 2,
+    "REQ": 3,
     "BUG": 1
   }
 }

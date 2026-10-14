@@ -411,6 +411,73 @@ def test_render_args_and_results_handle_sql_apply_patch_line_numbers_and_diff():
     assert 'class="diff-del"' in diff_html
 
 
+def test_render_steps_displays_apply_patch_paths_in_order_and_escapes_them():
+    patch = (
+        "*** Begin Patch\n"
+        "*** Update File: src/a&b.py\n"
+        "@@\n"
+        "*** Add File: docs/new <file>.md\n"
+        "+content\n"
+        "*** Delete File: old's.txt\n"
+        "*** Update File: old name.txt\n"
+        "*** Move to: renamed & moved.txt\n"
+        "*** End Patch\n"
+    )
+
+    html = sv.render_steps(
+        [{
+            "kind": "tool",
+            "name": "apply_patch",
+            "arguments": patch,
+            "intent_summary": "Keep this intent",
+            "success": False,
+            "ts_start": "start timestamp",
+            "ts_end": "end timestamp",
+        }],
+        0,
+    )
+
+    assert (
+        '<span class="tool-file-paths">src/a&amp;b.py, docs/new &lt;file&gt;.md, '
+        "old&#x27;s.txt, old name.txt, renamed &amp; moved.txt</span>"
+    ) in html
+    assert '<span class="tool-intent">Keep this intent</span>' in html
+    assert '<span class="badge-fail">✗</span>' in html
+    assert '<span class="tool-meta">start timestamp → end timestamp</span>' in html
+
+
+def test_render_steps_leaves_summaries_unchanged_without_apply_patch_paths():
+    patch_html = sv.render_steps(
+        [{
+            "kind": "tool",
+            "name": "apply_patch",
+            "arguments": "*** Begin Patch\n*** End Patch\n",
+            "intent_summary": "Patch without file paths",
+            "ts_start": "start timestamp",
+            "ts_end": "end timestamp",
+        }],
+        0,
+    )
+    other_tool_html = sv.render_steps(
+        [{
+            "kind": "tool",
+            "name": "bash",
+            "arguments": {"command": "echo ok", "description": "Run command"},
+            "intent_summary": "Other tool summary",
+            "ts_start": "other start",
+            "ts_end": "other end",
+        }],
+        0,
+    )
+
+    assert "tool-file-paths" not in patch_html
+    assert '<span class="tool-intent">Patch without file paths</span>' in patch_html
+    assert '<span class="tool-meta">start timestamp → end timestamp</span>' in patch_html
+    assert "tool-file-paths" not in other_tool_html
+    assert '<span class="tool-intent">Other tool summary</span>' in other_tool_html
+    assert '<span class="tool-meta">other start → other end</span>' in other_tool_html
+
+
 def test_session_store_sql_result_renders_markdown_table():
     result = {
         "content": (

@@ -1707,6 +1707,21 @@ def render_steps(steps: list, turn_idx: int) -> str:
                 f'<span class="tool-intent"{summary_attr}>{escape(summary)}</span>'
                 if summary else ""
             )
+            patch_paths_html = ""
+            if name == "apply_patch" and isinstance(args, str):
+                paths = [
+                    path.strip()
+                    for path in re.findall(
+                        r"^\*\*\* (?:Update File|Add File|Delete File|Move to):[ \t]*(.*?)[ \t]*$",
+                        args,
+                        re.MULTILINE,
+                    )
+                    if path.strip()
+                ]
+                if paths:
+                    patch_paths_html = (
+                        f'\n                <span class="tool-file-paths">{escape(", ".join(paths))}</span>'
+                    )
             body_html = (
                 _render_ask_user_interaction(args, result)
                 if name == "ask_user"
@@ -1722,7 +1737,7 @@ def render_steps(steps: list, turn_idx: int) -> str:
                 <span class="tool-icon">{icon}</span>
                 <span class="tool-name">{escape(name)}</span>
                 {summary_html}
-                {answer_html}
+                {answer_html}{patch_paths_html}
                 {status_badge}
                 <span class="tool-meta">{ts_s} → {ts_e}</span>
                 {raw_link}
