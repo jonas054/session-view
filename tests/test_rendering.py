@@ -437,10 +437,17 @@ def test_render_steps_displays_apply_patch_paths_in_order_and_escapes_them():
         0,
     )
 
-    assert (
-        '<span class="tool-file-paths">src/a&amp;b.py, docs/new &lt;file&gt;.md, '
-        "old&#x27;s.txt, old name.txt, renamed &amp; moved.txt</span>"
-    ) in html
+    expected_paths_html = (
+        '<span class="tool-file-paths">'
+        "<span>src/a&amp;b.py</span>"
+        "<span>docs/new &lt;file&gt;.md</span>"
+        "<span>old&#x27;s.txt</span>"
+        "<span>old name.txt</span>"
+        "<span>renamed &amp; moved.txt</span>"
+        "</span>"
+    )
+    assert expected_paths_html in html
+    assert html.index('<span class="tool-meta">start timestamp → end timestamp</span>') < html.index(expected_paths_html)
     assert '<span class="tool-intent">Keep this intent</span>' in html
     assert '<span class="badge-fail">✗</span>' in html
     assert '<span class="tool-meta">start timestamp → end timestamp</span>' in html

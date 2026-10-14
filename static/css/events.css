@@ -169,6 +169,11 @@ details[open] > .tool-summary { border-bottom: 1px solid #e2e8f0; }
 .tool-name { font-weight: 600; font-size: 13px; }
 .tool-intent { color: #64748b; font-size: 12px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tool-meta { margin-left: auto; font-size: 11px; color: #94a3b8; white-space: nowrap; }
+.tool-file-paths {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
 
 .badge-success { color: #16a34a; font-size: 13px; }
 .badge-fail    { color: #dc2626; font-size: 13px; }

@@ -1720,7 +1720,9 @@ def render_steps(steps: list, turn_idx: int) -> str:
                 ]
                 if paths:
                     patch_paths_html = (
-                        f'\n                <span class="tool-file-paths">{escape(", ".join(paths))}</span>'
+                        '<span class="tool-file-paths">'
+                        + "".join(f"<span>{escape(path)}</span>" for path in paths)
+                        + "</span>"
                     )
             body_html = (
                 _render_ask_user_interaction(args, result)
@@ -1737,8 +1739,9 @@ def render_steps(steps: list, turn_idx: int) -> str:
                 <span class="tool-icon">{icon}</span>
                 <span class="tool-name">{escape(name)}</span>
                 {summary_html}
-                {answer_html}{patch_paths_html}
+                {answer_html}
                 {status_badge}
+                {patch_paths_html}
                 <span class="tool-meta">{ts_s} → {ts_e}</span>
                 {raw_link}
               </summary>
