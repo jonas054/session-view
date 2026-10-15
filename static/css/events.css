@@ -173,6 +173,7 @@ details[open] > .tool-summary { border-bottom: 1px solid #e2e8f0; }
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  font-size: 13px;
 }
 
 .badge-success { color: #16a34a; font-size: 13px; }
@@ -351,6 +352,8 @@ details[open] > .tool-summary { border-bottom: 1px solid #e2e8f0; }
 .reasoning-header {
   padding: 8px;
 }
+
+.reasoning-static .reasoning-inline-content { font-size: 13px; }
 
 .reasoning-body {
   background: #fcfaff;

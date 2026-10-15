@@ -1,6 +1,7 @@
 import html as html_module
 import json
 import shlex
+import re
 
 import session_view as sv
 
@@ -388,6 +389,25 @@ def test_process_file_renders_story_tab_a11y_and_query_hooks(rich_session_dir, t
     assert sv.CSS_A11Y.strip() in html
     assert 'class="back-link"' in html
     assert "url.searchParams.set('q', query);" in html
+
+
+def test_static_and_expanded_reasoning_share_font_size():
+    inline = re.search(
+        r"\.reasoning-static \.reasoning-inline-content\s*\{\s*font-size:\s*([^;]+);",
+        sv.CSS,
+    )
+    expanded = re.search(r"\.reasoning-body\s*\{[^}]*font-size:\s*([^;]+);", sv.CSS)
+
+    assert inline and expanded
+    assert inline.group(1) == expanded.group(1)
+
+
+def test_tool_file_paths_match_tool_name_font_size():
+    paths = re.search(r"\.tool-file-paths\s*\{[^}]*font-size:\s*([^;]+);", sv.CSS)
+    tool_name = re.search(r"\.tool-name\s*\{[^}]*font-size:\s*([^;]+);", sv.CSS)
+
+    assert paths and tool_name
+    assert paths.group(1) == tool_name.group(1)
 
 
 def test_process_file_marks_searchable_session_fields(rich_session_dir, tmp_path):
