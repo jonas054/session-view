@@ -485,6 +485,42 @@ def test_render_steps_leaves_summaries_unchanged_without_apply_patch_paths():
     assert '<span class="tool-meta">other start → other end</span>' in other_tool_html
 
 
+def test_render_steps_marks_empty_glob_results_in_heading():
+    def render(result, success=True, name="glob"):
+        return sv.render_steps(
+            [{
+                "kind": "tool",
+                "name": name,
+                "arguments": {"pattern": "**/*.py"},
+                "intent_summary": "Find Python files",
+                "result": result,
+                "success": success,
+            }],
+            0,
+        )
+
+    for result in (
+        {"content": ""},
+        {"content": "No files matched the pattern."},
+        [],
+    ):
+        html = render(result)
+        assert '<span class="tool-intent">No files found — Find Python files</span>' in html
+
+    assert '<pre class="result-pre">No files matched the pattern.</pre>' in render(
+        {"content": "No files matched the pattern."}
+    )
+    assert "No files found" not in render({"content": "src/main.py"})
+    assert "No files found" not in render(
+        {"content": "No files matched the pattern."},
+        success=False,
+    )
+    assert "No files found" not in render(
+        {"content": "No files matched the pattern."},
+        name="grep",
+    )
+
+
 def test_session_store_sql_result_renders_markdown_table():
     result = {
         "content": (

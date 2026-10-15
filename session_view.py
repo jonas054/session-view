@@ -805,6 +805,34 @@ def _extract_result_texts(result) -> list[str]:
     return [str(result)]
 
 
+def _glob_result_has_no_files(result) -> bool:
+    if result is None:
+        return False
+    if isinstance(result, dict):
+        texts = [
+            text
+            for key in ("content", "detailedContent")
+            if isinstance(text := result.get(key), str)
+        ]
+        if not texts:
+            return False
+    elif isinstance(result, (list, tuple)):
+        return not result
+    else:
+        texts = [str(result)]
+
+    if not any(text.strip() for text in texts):
+        return True
+    return any(
+        re.match(
+            r"^\s*No\s+(?:files?|match(?:es)?)\s+(?:(?:were|are)\s+)?(?:found|match(?:ed)?)\b",
+            text,
+            re.IGNORECASE,
+        )
+        for text in texts
+    )
+
+
 def _normalize_ask_user_value(value) -> str:
     return _normalize_inline_text("" if value is None else str(value))
 
@@ -1688,6 +1716,9 @@ def render_steps(steps: list, turn_idx: int) -> str:
             icon = tool_icon(name)
             args = step.get("arguments", {})
             result = step.get("result")
+
+            if name == "glob" and success and _glob_result_has_no_files(result):
+                summary = f"{summary} ⭕️ not found" if summary else "No files found"
 
             answer_html = ""
             if name == "ask_user":

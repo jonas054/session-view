@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "active_spec": "specs/004-vertical-apply-patch-paths",
+  "active_spec": "specs/005-glob-empty-result-heading",
   "phases": {
     "plan": "complete",
     "implement": "complete",
