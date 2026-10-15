@@ -437,6 +437,7 @@ def _tool_result_fields(result_data: dict, event_id: str) -> dict:
     return {
         "result": result_data.get("result"),
         "success": result_data.get("success", True),
+        "error": result_data.get("error"),
         "event_id": event_id,
     }
 
@@ -1742,6 +1743,37 @@ def render_steps(steps: list, turn_idx: int) -> str:
             icon = tool_icon(name)
             args = step.get("arguments", {})
             result = step.get("result")
+            error = step.get("error")
+            error_preview_html = ""
+            error_panel_html = ""
+
+            if not success:
+                error_message = (
+                    str(error.get("message") or "")
+                    if isinstance(error, dict)
+                    else str(error or "")
+                )
+                if not error_message.strip():
+                    error_message = "No error details were recorded."
+                error_code = error.get("code") if isinstance(error, dict) else None
+                error_preview_html = (
+                    '<span class="tool-error-preview">'
+                    f'{escape(abbreviate(error_message, 120))}</span>'
+                )
+                error_code_html = (
+                    f'<div class="tool-error-code">Code: {escape(error_code)}</div>'
+                    if error_code is not None and error_code != ""
+                    else ""
+                )
+                error_panel_html = (
+                    '<div class="tool-error">'
+                    '<div class="tool-error-header">'
+                    '<div class="tool-error-label">Tool error</div>'
+                    f'{error_code_html}'
+                    '</div>'
+                    f'<div class="tool-error-message">{escape(error_message)}</div>'
+                    '</div>'
+                )
 
             if name == "glob" and success and _glob_result_has_no_files(result):
                 summary = f"{summary} ⭕️ not found" if summary else "No files found"
@@ -1757,7 +1789,7 @@ def render_steps(steps: list, turn_idx: int) -> str:
 
             status_badge = (
                 '<span class="badge-success">✓</span>' if success
-                else '<span class="badge-fail">✗</span>'
+                else '<span class="badge-fail">✗ Failed</span>'
             )
             summary_attr = ' data-search-field="prompts"' if name == "ask_user" else ""
             summary_html = (
@@ -1789,6 +1821,7 @@ def render_steps(steps: list, turn_idx: int) -> str:
                     f'{("<div class=\"tool-section-label\">Result</div>" + render_tool_result(result, name, args)) if result is not None else ""}'
                 )
             )
+            body_html = error_panel_html + body_html
 
             parts.append(f"""
             <details class="tool-step" id="{step_id}" data-search-field="tools">
@@ -1801,6 +1834,7 @@ def render_steps(steps: list, turn_idx: int) -> str:
                 {patch_paths_html}
                 <span class="tool-meta">{ts_s} → {ts_e}</span>
                 {raw_link}
+                {error_preview_html}
               </summary>
               <div class="tool-body">
                 {body_html}

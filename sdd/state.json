@@ -1,9 +1,10 @@
 {
   "version": 1,
-  "active_spec": "specs/005-glob-empty-result-heading",
+  "active_spec": "specs/006-display-tool-errors",
   "phases": {
     "plan": "complete",
     "implement": "complete",
-    "validate": "complete"
+    "sync_docs": "complete",
+    "validate": "blocked"
   }
 }

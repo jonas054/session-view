@@ -8,3 +8,11 @@
 .diff-add::before { content: "+"; }
 .diff-del::before { content: "−"; }
 .grep-match { background: #312e81; color: #c7d2fe; }
+.tool-error-preview { color: #c2410c; }
+.tool-error {
+  border-color: #fed7aa;
+  border-left-color: #ea580c;
+  background: #fff7ed;
+  color: #7c2d12;
+}
+.tool-error-label, .tool-error-code { color: #9a3412; }

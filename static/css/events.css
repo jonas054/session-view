@@ -176,12 +176,61 @@ details[open] > .tool-summary { border-bottom: 1px solid #e2e8f0; }
   font-size: 13px;
 }
 
+.tool-error-preview {
+  flex: 1 1 100%;
+  min-width: 0;
+  padding-left: 24px;
+  color: #b91c1c;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .badge-success { color: #16a34a; font-size: 13px; }
 .badge-fail    { color: #dc2626; font-size: 13px; }
 
 .tool-body {
   padding: 12px 14px;
   background: white;
+}
+
+.tool-error {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #fecdd3;
+  border-left: 3px solid #dc2626;
+  border-radius: 6px;
+  background: #fff1f2;
+  color: #7f1d1d;
+}
+
+.tool-error-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin-bottom: 4px;
+}
+
+.tool-error-label {
+  color: #9f1239;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+
+.tool-error-code {
+  color: #9f1239;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tool-error-message {
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .tool-section-label {
