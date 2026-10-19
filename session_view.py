@@ -2153,6 +2153,8 @@ def read_session(session_dir: Path) -> dict:
         "model_metrics": {},
         "search_fields": None,
     }
+    selected_model = ""
+    models = {}
 
     info["has_story"] = (session_dir / "story.txt").exists()
 
@@ -2171,15 +2173,13 @@ def read_session(session_dir: Path) -> dict:
         if event_type == "session.start":
             info["start_time"] = data.get("startTime", event.get("timestamp", ""))
             info["cwd"] = data.get("context", {}).get("cwd", "")
-            info["model"] = data.get("selectedModel", "")
+            selected_model = data.get("selectedModel") or ""
         elif event_type == "user.message":
             content = data.get("content", "")
             if _searchable_user_message(content):
                 info["user_prompt_count"] += 1
                 if not info["first_prompt"]:
                     info["first_prompt"] = abbreviate(content)
-        elif not info["model"] and "model" in data:
-            info["model"] = data["model"]
         elif event_type == "session.usage_checkpoint":
             total_nano_aiu = _extract_total_nano_aiu(data)
             if total_nano_aiu is not None:
@@ -2189,7 +2189,18 @@ def read_session(session_dir: Path) -> dict:
             if total_nano_aiu is not None:
                 info["total_nano_aiu"] = total_nano_aiu
             info["model_metrics"] = data.get("modelMetrics", {})
+            if isinstance(info["model_metrics"], dict):
+                for model in info["model_metrics"]:
+                    if model:
+                        models.setdefault(model, None)
 
+        model = data.get("model")
+        if isinstance(model, str) and model:
+            models.setdefault(model, None)
+
+    info["model"] = ", ".join(models) or (
+        selected_model if isinstance(selected_model, str) else ""
+    )
     info["search_fields"] = _build_search_fields(events, session_dir, info["cwd"], info["model"])
     info["search_text"] = " ".join(
         info["search_fields"].get(field, "")

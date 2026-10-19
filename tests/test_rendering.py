@@ -240,6 +240,56 @@ def test_read_session_counts_only_searchable_user_prompts(tmp_path):
     assert info["first_prompt"] == "Actual prompt"
 
 
+def test_read_session_lists_all_models_used_during_conversation(tmp_path):
+    session_dir = tmp_path / "session"
+    session_dir.mkdir()
+    events = [
+        {
+            "type": "session.start",
+            "timestamp": "2026-10-19T06:15:00Z",
+            "data": {"selectedModel": "gpt-5.4"},
+        },
+        {"type": "user.message", "data": {"content": "Use multiple models"}},
+        {"type": "assistant.message", "data": {"model": "gpt-5.4"}},
+        {"type": "assistant.message", "data": {"model": "claude-sonnet-4.6"}},
+        {"type": "assistant.message", "data": {"model": "gpt-5.4"}},
+        {
+            "type": "session.shutdown",
+            "data": {
+                "modelMetrics": {
+                    "gpt-5.4": {},
+                    "claude-sonnet-4.6": {},
+                    "gpt-6-luna": {},
+                }
+            },
+        },
+    ]
+    (session_dir / "events.jsonl").write_text(
+        "\n".join(json.dumps(event) for event in events) + "\n",
+        encoding="utf-8",
+    )
+
+    info = sv.read_session(session_dir)
+
+    assert info["model"] == "gpt-5.4, claude-sonnet-4.6, gpt-6-luna"
+    assert info["search_fields"]["model"] == info["model"]
+    html = sv.build_overview_html([info])
+    assert '"model": "gpt-5.4, claude-sonnet-4.6, gpt-6-luna"' in html
+
+
+def test_read_session_falls_back_to_selected_model_when_usage_is_unavailable(tmp_path):
+    session_dir = tmp_path / "session"
+    session_dir.mkdir()
+    (session_dir / "events.jsonl").write_text(
+        '{"type":"session.start","data":{"selectedModel":"gpt-5.4"}}\n',
+        encoding="utf-8",
+    )
+
+    info = sv.read_session(session_dir)
+
+    assert info["model"] == "gpt-5.4"
+
+
 def test_build_turns_reconstructs_reasoning_intent_tool_and_subagent_steps(rich_events):
     turns = sv.build_turns(rich_events)
 
