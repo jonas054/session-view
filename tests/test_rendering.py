@@ -240,7 +240,7 @@ def test_read_session_counts_only_searchable_user_prompts(tmp_path):
     assert info["first_prompt"] == "Actual prompt"
 
 
-def test_read_session_lists_all_models_used_during_conversation(tmp_path):
+def test_read_session_hides_models_below_five_percent_of_session_tokens(tmp_path):
     session_dir = tmp_path / "session"
     session_dir.mkdir()
     events = [
@@ -257,9 +257,18 @@ def test_read_session_lists_all_models_used_during_conversation(tmp_path):
             "type": "session.shutdown",
             "data": {
                 "modelMetrics": {
-                    "gpt-5.4": {},
-                    "claude-sonnet-4.6": {},
-                    "gpt-6-luna": {},
+                    "gpt-5.4": {
+                        "requests": {"count": 2},
+                        "usage": {"inputTokens": 900, "outputTokens": 20},
+                    },
+                    "claude-sonnet-4.6": {
+                        "requests": {"count": 50},
+                        "usage": {"inputTokens": 20, "outputTokens": 10},
+                    },
+                    "gpt-6-luna": {
+                        "requests": {"count": 2},
+                        "usage": {"inputTokens": 45, "outputTokens": 5},
+                    },
                 }
             },
         },
@@ -271,10 +280,10 @@ def test_read_session_lists_all_models_used_during_conversation(tmp_path):
 
     info = sv.read_session(session_dir)
 
-    assert info["model"] == "gpt-5.4, claude-sonnet-4.6, gpt-6-luna"
+    assert info["model"] == "gpt-5.4, gpt-6-luna"
     assert info["search_fields"]["model"] == info["model"]
     html = sv.build_overview_html([info])
-    assert '"model": "gpt-5.4, claude-sonnet-4.6, gpt-6-luna"' in html
+    assert '"model": "gpt-5.4, gpt-6-luna"' in html
 
 
 def test_read_session_falls_back_to_selected_model_when_usage_is_unavailable(tmp_path):

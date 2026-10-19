@@ -211,6 +211,7 @@ def fmt_number(n) -> str:
 
 
 NANO_AIUS_PER_CREDIT = 1_000_000_000
+MIN_MODEL_TOKEN_SHARE = 0.05
 
 
 def fmt_ai_credits(nano_aiu) -> str:
@@ -2189,18 +2190,34 @@ def read_session(session_dir: Path) -> dict:
             if total_nano_aiu is not None:
                 info["total_nano_aiu"] = total_nano_aiu
             info["model_metrics"] = data.get("modelMetrics", {})
-            if isinstance(info["model_metrics"], dict):
-                for model in info["model_metrics"]:
-                    if model:
-                        models.setdefault(model, None)
 
         model = data.get("model")
         if isinstance(model, str) and model:
             models.setdefault(model, None)
 
-    info["model"] = ", ".join(models) or (
-        selected_model if isinstance(selected_model, str) else ""
-    )
+    model_tokens = {}
+    if isinstance(info["model_metrics"], dict):
+        for model, metrics in info["model_metrics"].items():
+            usage = metrics.get("usage") if isinstance(metrics, dict) else None
+            if isinstance(usage, dict):
+                model_tokens[model] = (
+                    _numeric_value(usage.get("inputTokens"))
+                    + _numeric_value(usage.get("outputTokens"))
+                )
+
+    total_model_tokens = sum(model_tokens.values())
+    if total_model_tokens:
+        visible_models = [
+            model
+            for model, tokens in model_tokens.items()
+            if tokens / total_model_tokens >= MIN_MODEL_TOKEN_SHARE
+        ]
+    else:
+        fallback_model = selected_model if isinstance(selected_model, str) else ""
+        if not fallback_model:
+            fallback_model = next(iter(models), "")
+        visible_models = [fallback_model] if fallback_model else []
+    info["model"] = ", ".join(visible_models)
     info["search_fields"] = _build_search_fields(events, session_dir, info["cwd"], info["model"])
     info["search_text"] = " ".join(
         info["search_fields"].get(field, "")
