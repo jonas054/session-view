@@ -1,4 +1,6 @@
+import html as html_module
 import json
+import shlex
 
 import session_view as sv
 
@@ -17,6 +19,28 @@ def test_build_overview_tracks_metrics_and_excludes_report_intent_from_tools_use
     html = sv.render_overview(overview)
     assert "AI credits" in html
     assert ">3<" in html
+
+
+def test_render_html_includes_copyable_removal_command_for_managed_session(
+    rich_events, tmp_path, monkeypatch
+):
+    state_dir = tmp_path / "copilot's state" / "session-state"
+    session_dir = state_dir / "rich-session"
+    session_dir.mkdir(parents=True)
+    events_path = session_dir / "events.jsonl"
+    events_path.touch()
+    monkeypatch.setattr(sv, "_session_state_dir", lambda: state_dir)
+
+    expected_command = f"rm -rf {shlex.quote(str(session_dir.resolve()))}"
+    rendered_html = sv.render_html(sv.build_overview(rich_events), [], [], str(events_path))
+
+    story_row = rendered_html.index("<td>Generate story</td>")
+    remove_row = rendered_html.index("<td>Remove session from disk</td>")
+    assert story_row < remove_row
+    assert f"<code>{html_module.escape(expected_command)}</code>" in rendered_html
+    expected_js_arg = html_module.escape(json.dumps(expected_command), quote=True)
+    assert f'onclick="copyCmd(this, {expected_js_arg})"' in rendered_html
+    assert sv._session_delete_command(tmp_path / "outside" / "events.jsonl") is None
 
 
 def test_extract_intents_prefers_embedded_requests_and_deduplicates_execution_starts():

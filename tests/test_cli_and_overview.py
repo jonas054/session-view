@@ -1,4 +1,6 @@
 import json
+import os
+import shutil
 import sys
 
 import pytest
@@ -268,6 +270,72 @@ def test_main_batch_mode_skips_up_to_date_outputs(write_session_fixture, monkeyp
     assert "100% [0s] - Up to date:" in captured.out
     assert "Done: 0 written, 1 skipped." in captured.out
     assert not sv._overview_output_path().exists()
+
+
+def test_main_force_rebuilds_overview_after_session_directory_is_removed(
+    write_session_fixture, monkeypatch
+):
+    removed_dir = write_session_fixture("rich-session.jsonl", session_id="removed-session")
+    retained_dir = write_session_fixture("rich-session.jsonl", session_id="retained-session")
+    for session_dir in (removed_dir, retained_dir):
+        (session_dir / "events.html").write_text("existing render", encoding="utf-8")
+
+    sv.generate_overview()
+    overview_path = sv._overview_output_path()
+    removed_link = str(removed_dir / "events.html")
+    retained_link = str(retained_dir / "events.html")
+    assert removed_link in overview_path.read_text(encoding="utf-8")
+
+    shutil.rmtree(removed_dir)
+    retained_events = retained_dir / "events.jsonl"
+    retained_html = retained_dir / "events.html"
+    future_mtime = retained_events.stat().st_mtime + 100
+    os.utime(retained_html, (future_mtime, future_mtime))
+    monkeypatch.setattr(sv, "_effective_source_mtime", lambda: 0)
+    monkeypatch.setattr(sys, "argv", ["session_view.py", "--force"])
+
+    sv.main()
+
+    overview_html = overview_path.read_text(encoding="utf-8")
+    assert removed_link not in overview_html
+    assert retained_link in overview_html
+    assert retained_html.exists()
+
+
+def test_generate_overview_omits_removed_session_directory(write_session_fixture):
+    removed_dir = write_session_fixture("rich-session.jsonl", session_id="removed-session")
+    retained_dir = write_session_fixture("rich-session.jsonl", session_id="retained-session")
+    for session_dir in (removed_dir, retained_dir):
+        (session_dir / "events.html").write_text("existing render", encoding="utf-8")
+    sv.generate_overview()
+
+    shutil.rmtree(removed_dir)
+    sv.generate_overview()
+
+    overview_html = sv._overview_output_path().read_text(encoding="utf-8")
+    assert str(removed_dir / "events.html") not in overview_html
+    assert str(retained_dir / "events.html") in overview_html
+
+
+def test_main_force_writes_empty_overview_after_last_session_is_removed(
+    write_session_fixture, monkeypatch
+):
+    session_dir = write_session_fixture("rich-session.jsonl", session_id="removed-session")
+    (session_dir / "events.html").write_text("existing render", encoding="utf-8")
+    sv.generate_overview()
+    overview_path = sv._overview_output_path()
+    removed_link = str(session_dir / "events.html")
+    assert removed_link in overview_path.read_text(encoding="utf-8")
+
+    shutil.rmtree(session_dir)
+    monkeypatch.setattr(sv, "_effective_source_mtime", lambda: 0)
+    monkeypatch.setattr(sys, "argv", ["session_view.py", "--force"])
+
+    sv.main()
+
+    overview_html = overview_path.read_text(encoding="utf-8")
+    assert removed_link not in overview_html
+    assert ">0 sessions" in overview_html
 
 
 def test_main_batch_mode_reports_progress_for_skipped_and_written_files(

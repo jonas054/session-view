@@ -17,7 +17,7 @@ After the batch pass, sessions-overview.html is regenerated automatically.
 Flags:
     --story     Generate a Story tab by calling `Copilot CLI`.
                 The story is cached as story.txt next to events.jsonl.
-    --force     Re-generate story even if story.txt exists.
+    --force     Force-refresh the overview in batch mode, or re-generate story with --story.
     --language  Language for the generated story (e.g. "Swedish" or "Frnch").
     --a11y      Use a colorblind-friendly (deuteranopia/protanopia) colour palette.
 """
@@ -31,6 +31,7 @@ import html
 import json
 import os
 import re
+import shlex
 import sqlite3
 import sys
 import time
@@ -78,6 +79,17 @@ def _is_managed_session_events_path(path: str | Path) -> bool:
         return resolved.name == "events.jsonl" and _session_state_dir().resolve() in resolved.parents
     except OSError:
         return False
+
+
+def _session_delete_command(events_path: str | Path) -> str | None:
+    path = Path(events_path)
+    if path.name != "events.jsonl":
+        return None
+
+    session_dir = path.parent.resolve()
+    if session_dir.parent != _session_state_dir().resolve():
+        return None
+    return f"rm -rf {shlex.quote(str(session_dir))} && python3 {shlex.quote(str(HERE / 'session_view.py'))} --force"
 
 
 def _run_story_command(cmd):
@@ -1421,7 +1433,7 @@ def markdown_to_html(text: str) -> str:
     return "\n".join(out)
 
 
-def render_overview(ov: dict) -> str:
+def render_overview(ov: dict, delete_command: str | None = None) -> str:
     dt_start = parse_ts(ov["start_time"])
     date_str = dt_start.strftime("%A, %B %-d %Y at %H:%M %Z") if dt_start else "unknown"
 
@@ -1496,6 +1508,19 @@ def render_overview(ov: dict) -> str:
 
     resume_command = 'cd ' + escape(ov["cwd"] or "") + '; copilot --resume ' + escape(ov["session_id"])
     story_command = 'session_view --story ' + escape(ov["session_id"])
+    remove_session_row = ""
+    if delete_command:
+        delete_command_js = html.escape(json.dumps(delete_command), quote=True)
+        remove_session_row = f"""
+            <tr>
+              <td>Remove session from disk</td>
+              <td>
+                <span class="resume-cmd">
+                  <code>{escape(delete_command)}</code>
+                  <button class="copy-btn" onclick="copyCmd(this, {delete_command_js})" title="Copy">⎘</button>
+                </span>
+              </td>
+            </tr>"""
     return f"""
     <section class="overview-section">
       <h1 class="page-title">{_COPILOT_IMG} Copilot Session</h1>
@@ -1538,6 +1563,7 @@ def render_overview(ov: dict) -> str:
                 </span>
               </td>
             </tr>
+            {remove_session_row}
           </table>
         </div>
 
@@ -1809,7 +1835,7 @@ JS = _load_asset_text("static/js/events.js")
 COMMON_JS = _load_asset_text("static/js/common.js")
 
 def render_html(overview: dict, turns: list, events: list, source_path: str, a11y: bool = False, story_text: str | None = None) -> str:
-    ov_html = render_overview(overview)
+    ov_html = render_overview(overview, _session_delete_command(source_path))
     turns_html = render_turns(turns)
     raw_html = render_raw_events(events)
 
@@ -2316,10 +2342,9 @@ def generate_overview() -> None:
     paths = sorted(_glob.glob(pattern))
 
     if not paths:
-        print("No events.html files found.", file=sys.stderr)
-        return
-
-    print(f"Found {len(paths)} session(s) for overview…", file=sys.stderr)
+        print("No events.html files found; generating an empty overview.", file=sys.stderr)
+    else:
+        print(f"Found {len(paths)} session(s) for overview…", file=sys.stderr)
 
     summaries_path = _session_summaries_path()
 
@@ -2626,7 +2651,7 @@ def main():
     )
     parser.add_argument(
         "--force", default=False, action="store_true",
-        help="Re-generate story even if story.txt exists.",
+        help="Force-refresh the sessions overview in batch mode, or regenerate a story with --story.",
     )
     parser.add_argument(
         "-l", "--language", default=None,
@@ -2647,7 +2672,7 @@ def main():
             print("Error: -l/--language is not valid together with --story.", file=sys.stderr)
             sys.exit(1)
         if args.force and not args.story:
-            print("Error: -f/--force is not valid together with --story.", file=sys.stderr)
+            print("Error: -f/--force requires --story when an input file is specified.", file=sys.stderr)
             sys.exit(1)
         output_path = os.path.join(os.path.dirname(input_path), "events.html")
         source_mtime = max(effective_source_mtime, _story_mtime(input_path))
@@ -2669,6 +2694,9 @@ def main():
         pattern = _session_events_glob()
         paths = sorted(_glob.glob(pattern))
         if not paths:
+            if args.force:
+                generate_overview()
+                return
             print(f"No files matched: {pattern}", file=sys.stderr)
             sys.exit(1)
         print(f"Processing {len(paths)} session file(s)…")
@@ -2700,7 +2728,7 @@ def main():
                 print(f"{progress} ✗ {p}: {exc}")
                 skipped += 1
         print(f"\nDone: {ok} written, {skipped} skipped.")
-        if generated or _overview_needs_refresh():
+        if args.force or generated or _overview_needs_refresh():
             generate_overview()
 
 
