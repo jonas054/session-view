@@ -441,3 +441,39 @@ def test_generate_overview_merges_json_and_db_summaries(
     assert "Saved summary" not in overview_html
     assert persisted["rich-session"] == "DB summary"
     assert persisted["other-session"] == "Extra summary"
+
+
+def test_generate_overview_limits_list_to_newest_1000_sessions(
+    monkeypatch,
+    isolated_home,
+):
+    state_dir = isolated_home / ".copilot" / "session-state"
+    paths = [
+        str(state_dir / f"session-{index:04d}" / "events.html")
+        for index in range(1001)
+    ]
+    monkeypatch.setattr(sv._glob, "glob", lambda _: paths)
+
+    def read_session(session_dir):
+        index = int(session_dir.name.split("-")[-1])
+        return {
+            "id": session_dir.name,
+            "events_html": str(session_dir / "events.html"),
+            "start_time": f"2026-05-16T10:{index // 60:02d}:{index % 60:02d}Z",
+            "cwd": "",
+            "model": "test-model",
+            "user_prompt_count": 1,
+            "total_nano_aiu": 0,
+            "has_story": False,
+            "first_prompt": f"prompt-{index:04d}",
+            "model_metrics": {},
+        }
+
+    monkeypatch.setattr(sv, "read_session", read_session)
+
+    sv.generate_overview()
+
+    overview_html = sv._overview_output_path().read_text(encoding="utf-8")
+    assert "1000 sessions" in overview_html
+    assert '"prompt": "prompt-1000"' in overview_html
+    assert '"prompt": "prompt-0000"' not in overview_html

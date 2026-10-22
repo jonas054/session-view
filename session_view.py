@@ -1981,6 +1981,7 @@ SEARCH_FIELD_LABELS = {
     "story": "Story",
 }
 SEARCH_TEXT_LIMIT = 8000
+MAX_OVERVIEW_SESSIONS = 1000
 
 
 def _search_text(value) -> str:
@@ -2441,6 +2442,7 @@ def generate_overview() -> None:
         sessions.append(info)
 
     sessions.sort(key=lambda s: s["start_time"] or "", reverse=True)
+    sessions = sessions[:MAX_OVERVIEW_SESSIONS]
 
     html_content = build_overview_html(sessions)
 
