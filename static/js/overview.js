@@ -326,10 +326,13 @@ function render() {
     const promptHtml = promptText
       ? (promptMatched ? highlightText(promptText, positiveClauses) : escHtml(promptText))
       : '<em>—</em>';
+    const branchHtml = item.branch
+      ? `<a href="${escHtml(branchFilterUrl(window.location.href, item.branch))}">${escHtml(item.branch)}</a>`
+      : '<em>—</em>';
     tr.innerHTML =
       `<td class="ts">${escHtml(item.ts)}</td>` +
       `<td class="cwd" title="${escHtml(item.cwd)}">${escHtml(item.cwd_display)}</td>` +
-      `<td class="branch" title="${escHtml(item.branch)}">${item.branch ? escHtml(item.branch) : '<em>—</em>'}</td>` +
+      `<td class="branch" title="${escHtml(item.branch)}">${branchHtml}</td>` +
       `<td class="model">${escHtml(item.model)}</td>` +
       `<td class="activity" title="user prompts">${escHtml(item.activity)}</td>` +
       `<td class="ai-credits num" title="AI credits used">${escHtml(formatAiCredits(item.ai_credits))}</td>` +

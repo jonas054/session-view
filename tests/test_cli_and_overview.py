@@ -161,6 +161,7 @@ def test_build_overview_html_matches_full_and_displayed_directories_like_models(
     assert '"branch": "feature/session-branch"' in html
     assert 'title="Git branch at session start">Branch' in html
     assert "item.branch" in html
+    assert "branchFilterUrl(window.location.href, item.branch)" in html
     assert "function matchesQuery(item, q)" not in html
     assert "item.cwd_display" in html
     assert "item.model" in html

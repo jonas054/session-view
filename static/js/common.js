@@ -136,6 +136,14 @@ function searchFieldsParam(fields) {
   return SEARCH_FIELDS.filter(field => fields.has(field)).join(",");
 }
 
+function branchFilterUrl(currentUrl, branch) {
+  const url = new URL(currentUrl);
+  url.searchParams.set("q", branch);
+  url.searchParams.set("match", searchFieldsParam(new Set(["branch"])));
+  url.hash = "";
+  return url.toString();
+}
+
 function searchFieldText(item, field) {
   if (!item || !item.search_fields) return "";
   return String(item.search_fields[field] || "");
@@ -209,6 +217,7 @@ if (typeof module !== "undefined") {
     searchQueryOperatorPositions,
     parseSearchFields,
     searchFieldsParam,
+    branchFilterUrl,
     searchFieldText,
     searchFieldMatches,
     searchClausesRegex,
