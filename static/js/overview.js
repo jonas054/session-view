@@ -326,12 +326,15 @@ function render() {
     const promptHtml = promptText
       ? (promptMatched ? highlightText(promptText, positiveClauses) : escHtml(promptText))
       : '<em>—</em>';
+    const directoryHtml = item.cwd_display
+      ? `<a href="${escHtml(searchFieldFilterUrl(window.location.href, 'directory', item.cwd_display))}">${escHtml(item.cwd_display)}</a>`
+      : '<em>—</em>';
     const branchHtml = item.branch
-      ? `<a href="${escHtml(branchFilterUrl(window.location.href, item.branch))}">${escHtml(item.branch)}</a>`
+      ? `<a href="${escHtml(searchFieldFilterUrl(window.location.href, 'branch', item.branch))}">${escHtml(item.branch)}</a>`
       : '<em>—</em>';
     tr.innerHTML =
       `<td class="ts">${escHtml(item.ts)}</td>` +
-      `<td class="cwd" title="${escHtml(item.cwd)}">${escHtml(item.cwd_display)}</td>` +
+      `<td class="cwd" title="${escHtml(item.cwd)}">${directoryHtml}</td>` +
       `<td class="branch" title="${escHtml(item.branch)}">${branchHtml}</td>` +
       `<td class="model">${escHtml(item.model)}</td>` +
       `<td class="activity" title="user prompts">${escHtml(item.activity)}</td>` +

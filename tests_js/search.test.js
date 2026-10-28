@@ -9,7 +9,7 @@ const {
   searchQueryOperatorPositions,
   parseSearchFields,
   searchFieldsParam,
-  branchFilterUrl,
+  searchFieldFilterUrl,
   searchFieldMatches,
   searchQueryMatchesParsed,
   searchQueryMatches,
@@ -51,14 +51,29 @@ test("branch can be selected as a search field", () => {
 
 test("branch links filter only by the selected branch", () => {
   const url = new URL(
-    branchFilterUrl(
+    searchFieldFilterUrl(
       "file:///tmp/sessions-overview.html?q=old&match=prompts#overview",
+      "branch",
       "feature/a&b",
     ),
   );
 
   assert.equal(url.searchParams.get("q"), "feature/a&b");
   assert.equal(url.searchParams.get("match"), "branch");
+  assert.equal(url.hash, "");
+});
+
+test("directory links filter only by the selected directory", () => {
+  const url = new URL(
+    searchFieldFilterUrl(
+      "file:///tmp/sessions-overview.html?q=old&match=prompts#overview",
+      "directory",
+      "example/project",
+    ),
+  );
+
+  assert.equal(url.searchParams.get("q"), "example/project");
+  assert.equal(url.searchParams.get("match"), "directory");
   assert.equal(url.hash, "");
 });
 
