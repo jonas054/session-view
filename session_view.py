@@ -1540,7 +1540,7 @@ def render_overview(ov: dict, delete_command: str | None = None) -> str:
           <table class="kv-table">
             <tr><td>Working directory</td><td><code data-search-field="directory">{escape(ov["cwd"] or "—")}</code></td></tr>
             <tr><td>Model</td><td><code data-search-field="model">{escape(ov.get("model") or "—")}</code></td></tr>
-            <tr><td>Branch</td><td><code>{escape(ov["branch"] or "—")}</code></td></tr>
+            <tr><td>Branch</td><td><code data-search-field="branch">{escape(ov["branch"] or "—")}</code></td></tr>
             <tr><td>Commit</td><td><code>{escape((ov["head_commit"] or "—")[:12])}</code></td></tr>
             <tr><td>Session ID</td><td><code>{escape(ov["session_id"] or "—")}</code></td></tr>
             <tr>
@@ -1965,6 +1965,7 @@ SEARCH_FIELD_ORDER = (
     "intents",
     "tools",
     "directory",
+    "branch",
     "model",
     "summary",
     "story",
@@ -1976,6 +1977,7 @@ SEARCH_FIELD_LABELS = {
     "intents": "Intents",
     "tools": "Tools",
     "directory": "Directory",
+    "branch": "Branch",
     "model": "Model",
     "summary": "Summary",
     "story": "Story",
@@ -2021,7 +2023,9 @@ def _searchable_user_message(content) -> bool:
     )
 
 
-def _build_search_fields(events: list, session_dir: Path, cwd: str, model: str) -> dict[str, str]:
+def _build_search_fields(
+    events: list, session_dir: Path, cwd: str, branch: str, model: str
+) -> dict[str, str]:
     parts = {field: [] for field in SEARCH_FIELD_ORDER}
     tool_records = {}
     ask_user_records = {}
@@ -2124,6 +2128,7 @@ def _build_search_fields(events: list, session_dir: Path, cwd: str, model: str) 
         _append_search_part(parts, "tools", _cap_search_text("\n".join(tool_parts)))
 
     _append_search_part(parts, "directory", cwd)
+    _append_search_part(parts, "branch", branch)
     _append_search_part(parts, "model", model)
 
     story_path = session_dir / "story.txt"
@@ -2221,7 +2226,9 @@ def read_session(session_dir: Path) -> dict:
             fallback_model = next(iter(models), "")
         visible_models = [fallback_model] if fallback_model else []
     info["model"] = ", ".join(visible_models)
-    info["search_fields"] = _build_search_fields(events, session_dir, info["cwd"], info["model"])
+    info["search_fields"] = _build_search_fields(
+        events, session_dir, info["cwd"], info["branch"], info["model"]
+    )
     info["search_text"] = " ".join(
         info["search_fields"].get(field, "")
         for field in SEARCH_FIELD_ORDER
@@ -2252,6 +2259,7 @@ def build_overview_html(sessions: list) -> str:
             search_fields["directory"] = "\n".join(
                 value for value in dict.fromkeys(directory_values) if value
             )
+            search_fields["branch"] = branch
             search_fields["model"] = str(s["model"] or "")
             search_fields["summary"] = str(s.get("summary") or "")
             search_text = " ".join(
@@ -2368,7 +2376,7 @@ def build_overview_html(sessions: list) -> str:
       <div class="toolbar">
         <div class="search-input-shell">
           <div class="search-highlight" id="search-highlight" aria-hidden="true"></div>
-          <input class="search-bar" type="search" placeholder="Filter by prompt, directory, model, or text… e.g. foo bar or &quot;foo bar&quot;" id="search" autofocus>
+          <input class="search-bar" type="search" placeholder="Filter by prompt, directory, branch, model, or text… e.g. foo bar or &quot;foo bar&quot;" id="search" autofocus>
         </div>
         <fieldset class="search-fields" id="search-fields">
           <legend>Match in</legend>

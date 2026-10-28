@@ -22,6 +22,14 @@ def test_build_overview_tracks_metrics_and_excludes_report_intent_from_tools_use
     assert ">3<" in html
 
 
+def test_render_html_marks_branch_as_searchable(rich_events):
+    rendered_html = sv.render_html(
+        sv.build_overview(rich_events), [], [], "/tmp/events.jsonl"
+    )
+
+    assert '<code data-search-field="branch">main</code>' in rendered_html
+
+
 def test_render_html_includes_copyable_removal_command_for_managed_session(
     rich_events, tmp_path, monkeypatch
 ):
@@ -355,6 +363,7 @@ def test_read_session_collects_search_text(rich_session_dir):
     assert info["user_prompt_count"] == 1
     assert info["first_prompt"] == "Render the session nicely"
     assert info["branch"] == "main"
+    assert info["search_fields"]["branch"] == "main"
     assert "**Plan**: inspect rendered output." in info["search_text"]
     assert "Rendering session view" in info["search_text"]
     assert info["search_fields"]["prompts"] == "Render the session nicely"

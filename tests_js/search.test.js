@@ -17,7 +17,7 @@ const {
 const term = text => ({ text, phrase: false });
 const phrase = text => ({ text, phrase: true });
 
-test("search fields have the stable nine-field order", () => {
+test("search fields have the stable ten-field order", () => {
   assert.deepEqual(SEARCH_FIELDS, [
     "prompts",
     "replies",
@@ -25,10 +25,27 @@ test("search fields have the stable nine-field order", () => {
     "intents",
     "tools",
     "directory",
+    "branch",
     "model",
     "summary",
     "story",
   ]);
+});
+
+test("branch can be selected as a search field", () => {
+  const item = { search_fields: { branch: "feature/branch-filter" } };
+  assert.equal(
+    searchQueryMatches(item, new Set(["branch"]), "branch-filter"),
+    true,
+  );
+  assert.equal(
+    searchQueryMatches(item, new Set(["prompts"]), "branch-filter"),
+    false,
+  );
+  assert.deepEqual(
+    [...parseSearchFields(new URL("file:///tmp/sessions-overview.html?match=branch"))],
+    ["branch"],
+  );
 });
 
 test("matching is case-insensitive and collapses whitespace", () => {

@@ -17,6 +17,7 @@ const snippetPriority = [
   "tools",
   "story",
   "directory",
+  "branch",
   "model",
   "summary",
 ];
