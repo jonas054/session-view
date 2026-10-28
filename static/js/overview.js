@@ -1,5 +1,5 @@
 const DATA = __DATA__;
-let sortCol = 0;   // 0=ts, 1=cwd, 2=model, 3=activity, 4=AI credits, 5=story, 6=summary, 7=prompt
+let sortCol = 0;   // 0=ts, 1=cwd, 2=branch, 3=model, 4=activity, 5=AI credits, 6=story, 7=summary, 8=prompt
 let sortAsc = false;
 let query = '';
 let selectedFields = new Set(SEARCH_FIELDS);
@@ -31,6 +31,7 @@ function getGroupKey(item, col) {
     values = [
       item.ts.slice(0, 10),       // YYYY-MM-DD
       item.cwd || '(none)',
+      item.branch || '(none)',
       item.model || '(unknown)',
       String(item.activity_total),
       String(item.ai_credits || 0),
@@ -49,6 +50,7 @@ function getSortVal(item, col) {
     values = [
       item.ts_raw,
       (item.cwd || '').toLowerCase(),
+      (item.branch || '').toLowerCase(),
       (item.model || '').toLowerCase(),
       item.activity_total,
       item.ai_credits || 0,
@@ -303,7 +305,7 @@ function render() {
       tr.className = 'group-header';
       tr.dataset.group = gk;
       tr.innerHTML =
-        `<td colspan="8">` +
+        `<td colspan="9">` +
         `<strong>${escHtml(gk)}</strong>` +
         `<span class="group-count">${cnt} session${cnt === 1 ? '' : 's'}</span></td>`;
       frag.appendChild(tr);
@@ -326,6 +328,7 @@ function render() {
     tr.innerHTML =
       `<td class="ts">${escHtml(item.ts)}</td>` +
       `<td class="cwd" title="${escHtml(item.cwd)}">${escHtml(item.cwd_display)}</td>` +
+      `<td class="branch" title="${escHtml(item.branch)}">${item.branch ? escHtml(item.branch) : '<em>—</em>'}</td>` +
       `<td class="model">${escHtml(item.model)}</td>` +
       `<td class="activity" title="user prompts">${escHtml(item.activity)}</td>` +
       `<td class="ai-credits num" title="AI credits used">${escHtml(formatAiCredits(item.ai_credits))}</td>` +
@@ -340,7 +343,7 @@ function render() {
       if (snippet) {
         const sTr = document.createElement('tr');
         sTr.className = 'snippet-row';
-        sTr.innerHTML = `<td colspan="8">${snippet.html}</td>`;
+        sTr.innerHTML = `<td colspan="9">${snippet.html}</td>`;
         makeRowClickable(sTr, sessionHref);
         frag.appendChild(sTr);
       }

@@ -142,7 +142,7 @@
 .data-row { cursor: pointer; }
 .data-row:hover td { background: #f8fafc; }
 .ts { white-space: nowrap; color: #64748b; font-variant-numeric: tabular-nums; }
-.cwd { white-space: nowrap; color: #64748b; font-size: 12px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.cwd, .branch { white-space: nowrap; color: #64748b; font-size: 12px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
 .model { color: #7c3aed; font-size: 12px; }
 .activity { white-space: nowrap; color: #64748b; font-variant-numeric: tabular-nums; text-align: right; }
 .story-indicator { white-space: nowrap; text-align: center; width: 1%; }

@@ -143,6 +143,7 @@ def test_build_overview_html_matches_full_and_displayed_directories_like_models(
                 "events_html": "/tmp/directory/events.html",
                 "start_time": "2026-05-16T10:00:00Z",
                 "cwd": "/tmp/example/project",
+                "branch": "feature/session-branch",
                 "first_prompt": "Find the directory session",
                 "search_text": "",
                 "model": "gpt-5.4",
@@ -157,6 +158,9 @@ def test_build_overview_html_matches_full_and_displayed_directories_like_models(
 
     assert '"cwd": "/tmp/example/project"' in html
     assert '"cwd_display": "example/project"' in html
+    assert '"branch": "feature/session-branch"' in html
+    assert 'title="Git branch at session start">Branch' in html
+    assert "item.branch" in html
     assert "function matchesQuery(item, q)" not in html
     assert "item.cwd_display" in html
     assert "item.model" in html

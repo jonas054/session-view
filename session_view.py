@@ -2146,6 +2146,7 @@ def read_session(session_dir: Path) -> dict:
         "events_html": session_dir / "events.html",
         "start_time": "",
         "cwd": "",
+        "branch": "",
         "first_prompt": "",
         "search_text": "",
         "model": "",
@@ -2175,6 +2176,7 @@ def read_session(session_dir: Path) -> dict:
         if event_type == "session.start":
             info["start_time"] = data.get("startTime", event.get("timestamp", ""))
             info["cwd"] = data.get("context", {}).get("cwd", "")
+            info["branch"] = data.get("context", {}).get("branch", "")
             selected_model = data.get("selectedModel") or ""
         elif event_type == "user.message":
             content = data.get("content", "")
@@ -2239,6 +2241,7 @@ def build_overview_html(sessions: list) -> str:
 
         cwd = s["cwd"]
         cwd_display = "/".join(cwd.replace(home, "~").split("/")[-2:]) if cwd else ""
+        branch = str(s.get("branch") or "")
         raw_search_fields = s.get("search_fields")
         if isinstance(raw_search_fields, dict):
             search_fields = {
@@ -2264,6 +2267,7 @@ def build_overview_html(sessions: list) -> str:
             "ts_raw": s["start_time"],
             "cwd": cwd,
             "cwd_display": cwd_display,
+            "branch": branch,
             "model": s["model"],
             "activity": str(s["user_prompt_count"]),
             "activity_total": s["user_prompt_count"],
@@ -2381,12 +2385,13 @@ def build_overview_html(sessions: list) -> str:
           <tr>
             <th data-col="0">Started <span class="sort-ind"> ↓</span></th>
             <th data-col="1">Directory <span class="sort-ind"> ↕</span></th>
-            <th data-col="2">Model <span class="sort-ind"> ↕</span></th>
-            <th data-col="3" title="user prompts">Prompts <span class="sort-ind"> ↕</span></th>
-            <th data-col="4" title="AI credits used">✨ <span class="sort-ind"> ↕</span></th>
-            <th data-col="5" title="story available">📖 <span class="sort-ind"> ↕</span></th>
-            <th data-col="6">Summary <span class="sort-ind"> ↕</span></th>
-            <th data-col="7">First prompt <span class="sort-ind"> ↕</span></th>
+            <th data-col="2" title="Git branch at session start">Branch <span class="sort-ind"> ↕</span></th>
+            <th data-col="3">Model <span class="sort-ind"> ↕</span></th>
+            <th data-col="4" title="user prompts">Prompts <span class="sort-ind"> ↕</span></th>
+            <th data-col="5" title="AI credits used">✨ <span class="sort-ind"> ↕</span></th>
+            <th data-col="6" title="story available">📖 <span class="sort-ind"> ↕</span></th>
+            <th data-col="7">Summary <span class="sort-ind"> ↕</span></th>
+            <th data-col="8">First prompt <span class="sort-ind"> ↕</span></th>
           </tr>
         </thead>
         <tbody></tbody>

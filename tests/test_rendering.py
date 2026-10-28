@@ -354,6 +354,7 @@ def test_read_session_collects_search_text(rich_session_dir):
     assert info["model"] == "gpt-5.4"
     assert info["user_prompt_count"] == 1
     assert info["first_prompt"] == "Render the session nicely"
+    assert info["branch"] == "main"
     assert "**Plan**: inspect rendered output." in info["search_text"]
     assert "Rendering session view" in info["search_text"]
     assert info["search_fields"]["prompts"] == "Render the session nicely"
