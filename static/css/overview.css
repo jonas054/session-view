@@ -156,6 +156,7 @@
   font-size: 12px;
 }
 .group-count { color: #94a3b8; font-weight: normal; margin-left: 6px; font-size: 11px; }
+.group-totals { color: #64748b; margin-left: 12px; font-size: 11px; }
 .mu-section { margin-top: 0; }
 .mu-title { font-size: 1rem; font-weight: 700; margin-bottom: 12px; color: #1e293b; }
 .mu-table { border-collapse: collapse; font-size: 13px; }

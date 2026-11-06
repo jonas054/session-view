@@ -288,9 +288,15 @@ function render() {
   });
 
   const groupCounts = {};
+  const dailyTotals = {};
   filtered.forEach(item => {
     const gk = getGroupKey(item, sortCol);
     groupCounts[gk] = (groupCounts[gk] || 0) + 1;
+    if (sortCol === 0) {
+      const totals = dailyTotals[gk] || (dailyTotals[gk] = { prompts: 0, credits: 0 });
+      totals.prompts += item.activity_total;
+      totals.credits += Number(item.ai_credits || 0);
+    }
   });
 
   const frag = document.createDocumentFragment();
@@ -305,10 +311,15 @@ function render() {
       const tr = document.createElement('tr');
       tr.className = 'group-header';
       tr.dataset.group = gk;
+      const totals = dailyTotals[gk];
+      const dailySummary = sortCol === 0 && totals
+        ? `<span class="group-totals">&nbsp;· ${totals.prompts.toLocaleString('en-US')} prompt${totals.prompts === 1 ? '' : 's'} · ${formatAiCredits(totals.credits) || '0'} AI credit${Math.round(totals.credits) === 1 ? '' : 's'}</span>`
+        : '';
       tr.innerHTML =
         `<td colspan="9">` +
         `<strong>${escHtml(gk)}</strong>` +
-        `<span class="group-count">${cnt} session${cnt === 1 ? '' : 's'}</span></td>`;
+        `<span class="group-count">${cnt} session${cnt === 1 ? '' : 's'}</span>` +
+        dailySummary + `</td>`;
       frag.appendChild(tr);
     }
 
